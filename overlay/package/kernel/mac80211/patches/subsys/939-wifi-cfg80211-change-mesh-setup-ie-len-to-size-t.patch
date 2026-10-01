@@ -1,0 +1,38 @@
+From c706dc5da6e1764b2e75132f7815f75e75a6a34a Mon Sep 17 00:00:00 2001
+From: Srinivas Achary <srinivas@aerlync.com>
+Date: Thu, 23 Jul 2026 19:15:50 +0530
+Subject: [PATCH] wifi: cfg80211: change mesh_setup::ie_len to size_t
+
+The ie_len field in struct mesh_setup stores the length of the
+information elements (IEs) buffer. It is currently defined as u8,
+which limits the maximum supported length to 255 bytes.
+
+The IE length is derived from memory buffers whose size is naturally
+represented by size_t. Using u8 may truncate larger values and can
+result in incorrect length handling.
+
+Change ie_len to size_t so it can represent the full buffer length and
+match the type commonly used for memory sizes throughout the kernel.
+
+Signed-off-by: Ramakrishnan Rathinasamy <ramakrishnan@aerlync.com>
+Signed-off-by: Srinivas Achary <srinivas@aerlync.com>
+Link: https://patch.msgid.link/20260723134550.35167-1-srinivas@aerlync.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit c706dc5da6e1, v7.3-rc1)
+---
+ include/net/cfg80211.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 9ed5d34..d6cede2 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -2806,7 +2806,7 @@ struct mesh_setup {
+ 	u8 path_metric;
+ 	u8 auth_id;
+ 	const u8 *ie;
+-	u8 ie_len;
++	size_t ie_len;
+ 	bool is_authenticated;
+ 	bool is_secure;
+ 	bool user_mpm;

@@ -1,0 +1,73 @@
+From ba7a79b9bc87776c8c1808407a7508a8be3a789e Mon Sep 17 00:00:00 2001
+From: Slawomir Stepien <sst@poczta.fm>
+Date: Mon, 14 Sep 2026 10:13:50 +0200
+Subject: [PATCH] wifi: cfg80211: verify if AP_VLAN belongs to the correct AP
+
+The get_vlan() only checks if NL80211_ATTR_STA_VLAN target is an
+AP/AP_VLAN/P2P_GO interface on the same wiphy. It has no notion of which
+specific AP a given AP_VLAN belongs to.
+
+Fix that by comparing the ethernet addresses of the two net devices.
+Given VLAN A' must have the same address as AP A. Otherwise, return
+error code.
+
+Signed-off-by: Slawomir Stepien <sst@poczta.fm>
+Reported-by: Johannes Berg <johannes@sipsolutions.net>
+Link: https://lore.kernel.org/all/22e7ddfc50d7a6a16c437b876dab5fe223799610.camel@sipsolutions.net/
+Link: https://patch.msgid.link/20260914081350.83484-1-sst@poczta.fm
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit ba7a79b9bc87, v7.3-rc4)
+---
+ net/wireless/nl80211.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 9fdcd5d..3f1ba1e 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -8815,10 +8815,12 @@ int cfg80211_check_station_change(struct wiphy *wiphy,
+ EXPORT_SYMBOL(cfg80211_check_station_change);
+ 
+ /*
+- * Get vlan interface making sure it is running and on the right wiphy.
++ * Get vlan interface making sure it is running, on the right wiphy
++ * and actually belongs to the given AP/P2P_GO interface.
+  */
+ static struct net_device *get_vlan(struct genl_info *info,
+-				   struct cfg80211_registered_device *rdev)
++				   struct cfg80211_registered_device *rdev,
++				   struct net_device *dev)
+ {
+ 	struct nlattr *vlanattr = info->attrs[NL80211_ATTR_STA_VLAN];
+ 	struct net_device *v;
+@@ -8848,6 +8850,12 @@ static struct net_device *get_vlan(struct genl_info *info,
+ 		goto error;
+ 	}
+ 
++	/* Check if the VLAN interface belongs to the AP interface */
++	if (!dev || !ether_addr_equal(v->dev_addr, dev->dev_addr)) {
++		ret = -EINVAL;
++		goto error;
++	}
++
+ 	return v;
+  error:
+ 	dev_put(v);
+@@ -9145,7 +9153,7 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
+ 	if (err)
+ 		return err;
+ 
+-	params.vlan = get_vlan(info, rdev);
++	params.vlan = get_vlan(info, rdev, dev);
+ 	if (IS_ERR(params.vlan))
+ 		return PTR_ERR(params.vlan);
+ 
+@@ -9446,7 +9454,7 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+ 		}
+ 
+ 		/* must be last in here for error handling */
+-		params.vlan = get_vlan(info, rdev);
++		params.vlan = get_vlan(info, rdev, dev);
+ 		if (IS_ERR(params.vlan))
+ 			return PTR_ERR(params.vlan);
+ 		break;

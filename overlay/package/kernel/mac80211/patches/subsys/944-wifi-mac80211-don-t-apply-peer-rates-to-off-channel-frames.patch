@@ -1,0 +1,41 @@
+From f5dd0626d2b07c6f5c8c763d75d13c6307393bca Mon Sep 17 00:00:00 2001
+From: Johannes Berg <johannes.berg@intel.com>
+Date: Fri, 4 Sep 2026 16:57:05 +0200
+Subject: [PATCH] wifi: mac80211: don't apply peer rates to off-channel frames
+
+All the off-channel frames (including scan) aren't really part of
+the connection, so don't apply the station rates even if they're
+being sent to the station in question (e.g. by accident). They
+don't use the rate mask via IEEE80211_TX_CTRL_DONT_USE_RATE_MASK,
+but the station might not have rates of them either, hitting the
+warning found by syzbot.
+
+Assisted-by: LLM
+Reported-by: syzbot+34463a129786910405dd@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=34463a129786910405dd
+Link: https://patch.msgid.link/20260904165722.ade6b07421b8.I59b7ea810eb021a7a68b3090828a757b6dd85e57@changeid
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit f5dd0626d2b0, v7.3-rc4)
+---
+ net/mac80211/rate.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/net/mac80211/rate.c b/net/mac80211/rate.c
+index 433838a..eb2e247 100644
+--- a/net/mac80211/rate.c
++++ b/net/mac80211/rate.c
+@@ -373,6 +373,14 @@ static void __rate_control_send_low(struct ieee80211_hw *hw,
+ 	u32 rate_flags = 0;
+ 	int i;
+ 
++	/*
++	 * Frames that shouldn't use the rate mask could be anything,
++	 * even on a different band, so don't take the sta into account
++	 * to avoid ending up without rates.
++	 */
++	if (info->control.flags & IEEE80211_TX_CTRL_DONT_USE_RATE_MASK)
++		sta = NULL;
++
+ 	if (sband->band == NL80211_BAND_S1GHZ) {
+ 		info->control.rates[0].flags |= IEEE80211_TX_RC_S1G_MCS;
+ 		info->control.rates[0].idx = 0;

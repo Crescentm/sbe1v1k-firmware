@@ -1,0 +1,38 @@
+From e5b14e9ae82b6ba661a40bcf13c5cfe0d3254628 Mon Sep 17 00:00:00 2001
+From: Yuyang Huang <yuyanghuang@google.com>
+Date: Sat, 11 Jul 2026 09:54:03 +0900
+Subject: [PATCH] wifi: mac80211: use ifa_dev from event argument
+
+During address teardown, the netdevice's ip_ptr might be cleared before
+the inetaddr notifier is called. In this case, __in_dev_get_rtnl()
+returns NULL, causing the notifier to abort early and fail to update
+the ARP filter.
+
+Fix this by using the in_device pointer from the event argument
+(ifa->ifa_dev) which is guaranteed to be valid.
+
+Cc: Ido Schimmel <idosch@nvidia.com>
+Cc: Kuniyuki Iwashima <kuniyu@google.com>
+Signed-off-by: Yuyang Huang <yuyanghuang@google.com>
+Link: https://patch.msgid.link/20260711005405.2861680-3-yuyanghuang@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+(cherry picked from commit e5b14e9ae82b, v7.3-rc1)
+---
+ net/mac80211/main.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/net/mac80211/main.c b/net/mac80211/main.c
+index 06273aa..c4720ac 100644
+--- a/net/mac80211/main.c
++++ b/net/mac80211/main.c
+@@ -588,9 +588,7 @@ static int ieee80211_ifa_changed(struct notifier_block *nb,
+ 	if (sdata->vif.type != NL80211_IFTYPE_STATION)
+ 		return NOTIFY_DONE;
+ 
+-	idev = __in_dev_get_rtnl(sdata->dev);
+-	if (!idev)
+-		return NOTIFY_DONE;
++	idev = ifa->ifa_dev;
+ 
+ 	ifmgd = &sdata->u.mgd;
+ 

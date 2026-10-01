@@ -1,0 +1,30 @@
+From aa0069bd920a0bc02d40d84fe39e7ef478c229e8 Mon Sep 17 00:00:00 2001
+From: Johannes Berg <johannes.berg@intel.com>
+Date: Sun, 2 Aug 2026 10:40:09 +0200
+Subject: [PATCH] wifi: mac80211: fix RCU dereference in throughput estimate
+
+This is invoked with the wiphy mutex held, not in an RCU
+critical section, fix the dereference accordingly.
+
+Fixes: 2f925427e27a ("wifi: mac80211: estimate expected throughput if not provided by driver/rc")
+Link: https://patch.msgid.link/20260802104010.94bf0862c329.I0a05bf8ab999cb737c487d79082425257e10132a@changeid
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit aa0069bd920a, v7.3-rc1)
+[Crescentm: backported to backports 7.2: OpenWrt carries 2f925427e27a as subsys/361 in an older form (sdata->vif.bss_conf instead of a link bss_conf), so the same one-line change is applied to that code]
+---
+ net/mac80211/sta_info.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/mac80211/sta_info.c b/net/mac80211/sta_info.c
+index 0bf686e..2040b25 100644
+--- a/net/mac80211/sta_info.c
++++ b/net/mac80211/sta_info.c
+@@ -3076,7 +3076,7 @@ static u32 sta_estimate_expected_throughput(struct sta_info *sta,
+ 	u32 duration;
+ 	u8 band = 0;
+ 
+-	conf = rcu_dereference(sdata->vif.bss_conf.chanctx_conf);
++	conf = sdata_dereference(sdata->vif.bss_conf.chanctx_conf, sdata);
+ 	if (conf)
+ 			band = conf->def.chan->band;
+ 

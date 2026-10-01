@@ -1,0 +1,46 @@
+From 23c68b4aaf5e18ab95532fc6714b737d5b7c701c Mon Sep 17 00:00:00 2001
+From: Johannes Berg <johannes.berg@intel.com>
+Date: Fri, 4 Sep 2026 16:57:06 +0200
+Subject: [PATCH] wifi: mac80211: don't drop scan probe requests for lack of
+ peer rates
+
+While software scanning, ieee80211_tx_h_rate_ctrl() warns and drops the
+frame if the target station has no usable bitrate on the band that's
+currently being scanned.
+
+But that's really meant for data frames, not if we happen to scan for
+the BSSID on the wrong band, which can be constructed easily.
+
+Skip the check for IEEE80211_TX_CTRL_DONT_USE_RATE_MASK, the previous
+commit also ignored the station rate mask for such frames as well.
+
+Assisted-by: LLM
+Reported-by: syzbot+0d516b33238bd97ee864@syzkaller.appspotmail.com
+Closes: https://syzkaller.appspot.com/bug?extid=0d516b33238bd97ee864
+Link: https://patch.msgid.link/20260904165722.b57ea4ab82d3.Id6c9c42d5cef5901bfac88853647b03ba4077b3e@changeid
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit 23c68b4aaf5e, v7.3-rc4)
+---
+ net/mac80211/tx.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index 9e09e0b..d9a988d 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -744,10 +744,12 @@ ieee80211_tx_h_rate_ctrl(struct ieee80211_tx_data *tx)
+ 		assoc = test_sta_flag(tx->sta, WLAN_STA_ASSOC);
+ 
+ 	/*
+-	 * Lets not bother rate control if we're associated and cannot
+-	 * talk to the sta. This should not happen.
++	 * Lets not bother rate control if we're associated and cannot talk to
++	 * the sta. This should not happen - except for frames that aren't
++	 * really for the peer to start with and already ignore rates.
+ 	 */
+-	if (WARN(test_bit(SCAN_SW_SCANNING, &tx->local->scanning) && assoc &&
++	if (!(info->control.flags & IEEE80211_TX_CTRL_DONT_USE_RATE_MASK) &&
++	    WARN(test_bit(SCAN_SW_SCANNING, &tx->local->scanning) && assoc &&
+ 		 !rate_usable_index_exists(sband, &tx->sta->sta),
+ 		 "%s: Dropped data frame as no usable bitrate found while "
+ 		 "scanning and associated. Target station: "

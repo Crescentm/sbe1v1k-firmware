@@ -1,0 +1,35 @@
+From 4ae3128c230372b43d0c417e0fcf816e8290e9fa Mon Sep 17 00:00:00 2001
+From: Slawomir Stepien <sst@poczta.fm>
+Date: Thu, 10 Sep 2026 10:04:16 +0200
+Subject: [PATCH] wifi: cfg80211: do not support direct add of station to
+ AP_VLAN interfaces
+
+Prevent userspace from adding stations directly to AP_VLAN type
+interfaces. Userspace should first add the station to the base interface
+(AP type) and then can use CMD_SET_STATION to move it to AP_VLAN. The
+other way is by using NL80211_ATTR_STA_VLAN.
+
+Without this path, we cannot check if the AP has been started before
+adding the station - wdev for AP_VLAN does not store information about
+the base AP interface.
+
+Signed-off-by: Slawomir Stepien <sst@poczta.fm>
+Link: https://patch.msgid.link/20260910080418.725741-1-sst@poczta.fm
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit 4ae3128c2303, v7.3-rc4)
+---
+ net/wireless/nl80211.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 3f1ba1e..efce3a1 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -9413,7 +9413,6 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+ 
+ 	switch (wdev->iftype) {
+ 	case NL80211_IFTYPE_AP:
+-	case NL80211_IFTYPE_AP_VLAN:
+ 	case NL80211_IFTYPE_P2P_GO:
+ 		/* ignore WME attributes if iface/sta is not capable */
+ 		if (!(rdev->wiphy.flags & WIPHY_FLAG_AP_UAPSD) ||

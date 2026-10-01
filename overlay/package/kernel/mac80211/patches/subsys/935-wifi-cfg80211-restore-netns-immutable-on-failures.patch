@@ -1,0 +1,46 @@
+From e6660383ebf57723c69119029e36a3be7932bd60 Mon Sep 17 00:00:00 2001
+From: Johannes Berg <johannes.berg@intel.com>
+Date: Fri, 4 Sep 2026 17:01:59 +0200
+Subject: [PATCH] wifi: cfg80211: restore netns_immutable on failures
+
+[ Upstream commit eeee52cfd1d639774c9812e8890631404a057dd2 ]
+
+Switching a wiphy's netns has to clear netns_immutable before moving
+interfaces, but then if any of the interfaces fails to move, it gets
+netns_immutable cleared forever. Then userspace can move it by itself,
+breaking the assumption that they all move together.
+
+Fix the order here and always reset netns_immutable after attempting
+the move.
+
+Assisted-by: LLM
+Fixes: 463d018323851 ("cfg80211: make aware of net namespaces")
+Link: https://patch.msgid.link/20260904170220.7ea88157dcbc.Id868585a790be8b9ece9b39b0db464a5963faaf3@changeid
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+(cherry picked from commit e6660383ebf5 in linux-7.2.y)
+[Crescentm: backported to backports 7.2: kept the LINUX_VERSION_IS_GEQ() netns_immutable/netns_local switch around the moved assignment]
+---
+ net/wireless/core.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index e3266f6..a2e8689 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -171,13 +171,13 @@ int cfg80211_switch_netns(struct cfg80211_registered_device *rdev,
+ 		wdev->netdev->netns_local = false;
+ #endif
+ 		err = dev_change_net_namespace(wdev->netdev, net, "wlan%d");
+-		if (err)
+-			break;
+ #if LINUX_VERSION_IS_GEQ(6,15,0)
+ 		wdev->netdev->netns_immutable = true;
+ #elif LINUX_VERSION_IS_GEQ(6,12,0)
+ 		wdev->netdev->netns_local = true;
+ #endif
++		if (err)
++			break;
+ 	}
+ 
+ 	if (err) {

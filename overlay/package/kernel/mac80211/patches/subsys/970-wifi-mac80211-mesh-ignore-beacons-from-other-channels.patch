@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 12:00:00 +0800
+Subject: [PATCH] wifi: mac80211: mesh: ignore beacons from other channels
+
+ieee80211_mesh_rx_bcn_presp() derives the channel of a mesh beacon from
+its DS Parameter Set element (or the RX frequency) and only checks that
+the channel exists and is enabled. mesh_matches_local() does not compare
+the primary channel either, except for 6 GHz peers that carry a 6 GHz
+operation element.
+
+Since a wiphy can have multiple radios, __ieee80211_rx_handle_packet()
+passes management frames received by any radio to every interface. A
+mesh interface on one radio therefore also processes the beacons of mesh
+BSSes with the same mesh ID on the other radios' channels (e.g. the 5 GHz
+mesh of a dual-band neighbour while this interface is on 6 GHz, or the
+6 GHz beacons on a 5 GHz mesh). They match the local configuration, so
+mesh_neighbour_update() creates a station or, with a user space MPM,
+sends a new peer candidate event for a peer that cannot be reached on
+this channel. The same applies to beacons received off-channel during a
+scan and to 2.4 GHz beacons heard from an adjacent channel.
+
+Ignore beacons and probe responses whose channel is not the operating
+channel of the mesh interface.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+ net/mac80211/mesh.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/net/mac80211/mesh.c b/net/mac80211/mesh.c
+index 8f88141..8626cd3 100644
+--- a/net/mac80211/mesh.c
++++ b/net/mac80211/mesh.c
+@@ -1505,6 +1505,15 @@ static void ieee80211_mesh_rx_bcn_presp(struct ieee80211_sub_if_data *sdata,
+ 	if (!channel || channel->flags & IEEE80211_CHAN_DISABLED)
+ 		goto free;
+ 
++	/*
++	 * With multiple radios in one wiphy, frames received by any radio
++	 * are passed to all interfaces, so a mesh interface also sees the
++	 * beacons of mesh BSSes on the channels of the other radios. A
++	 * station on another channel cannot be a neighbour of this mesh.
++	 */
++	if (channel != sdata->vif.bss_conf.chanreq.oper.chan)
++		goto free;
++
+ 	if (mesh_matches_local(sdata, elems)) {
+ 		mpl_dbg(sdata, "rssi_threshold=%d,rx_status->signal=%d\n",
+ 			sdata->u.mesh.mshcfg.rssi_threshold, rx_status->signal);

@@ -1,0 +1,41 @@
+From 5e20d72350df589478691310f0e1c427f35ee4aa Mon Sep 17 00:00:00 2001
+From: Dhanavandhana Kannan <dhanavandhana.kannan@oss.qualcomm.com>
+Date: Tue, 23 Jun 2026 16:04:12 +0530
+Subject: [PATCH] wifi: cfg80211: Avoid UNPROT_BEACON on AP interfaces
+
+Currently, an AP may receive unprotected beacons from neighbouring
+BSSes, which cfg80211_rx_unprot_mlme_mgmt() forwards to userspace via
+NL80211_CMD_UNPROT_BEACON regardless of interface type.
+
+While the kernel rate-limits these events to once per 10 seconds per
+wdev, in multi-BSS scenarios each AP interface maintains its own
+rate-limit state, increasing the number of reported events.
+In AP mode, hostapd has no handler for NL80211_CMD_UNPROT_BEACON and
+logs an unhandled event message for each occurrence, leading to excessive
+log noise and making it harder to identify real issues.
+
+Since an AP does not need to act on unprotected beacons from neighbouring
+BSSes, skip reporting this event when operating in AP mode.
+
+Signed-off-by: Dhanavandhana Kannan <dhanavandhana.kannan@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260623103412.1578812-1-dhanavandhana.kannan@oss.qualcomm.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+(cherry picked from commit 5e20d72350df, v7.3-rc1)
+---
+ net/wireless/nl80211.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 590c3ea..ac3b0ad 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -20904,6 +20904,9 @@ void cfg80211_rx_unprot_mlme_mgmt(struct net_device *dev, const u8 *buf,
+ 	} else if (ieee80211_is_disassoc(mgmt->frame_control)) {
+ 		event.cmd = NL80211_CMD_UNPROT_DISASSOCIATE;
+ 	} else if (ieee80211_is_beacon(mgmt->frame_control)) {
++		if (wdev->iftype == NL80211_IFTYPE_AP ||
++		    wdev->iftype == NL80211_IFTYPE_P2P_GO)
++			return;
+ 		if (wdev->unprot_beacon_reported &&
+ 		    elapsed_jiffies_msecs(wdev->unprot_beacon_reported) < 10000)
+ 			return;
