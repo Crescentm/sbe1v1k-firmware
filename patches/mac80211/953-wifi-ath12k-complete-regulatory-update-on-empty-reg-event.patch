@@ -1,0 +1,57 @@
+Subject: [PATCH] wifi: ath12k: complete regulatory update on an empty reg event
+
+Firmware can answer a set-country request with an extended regulatory
+event that carries no rules at all. ath12k_pull_reg_chan_list_ext_update_ev()
+rejects such an event before it reads the PHY ID, so
+ath12k_reg_chan_list_event() cannot tell which radio it was for: it
+prints "failed to extract regulatory info from received event", hits the
+WARN_ON() in the fallback path and never completes regd_update_completed,
+so the waiter in ath12k_mac_hw_register() times out.
+
+Report the PHY ID with -ENODATA for an event without rules, and treat it
+as a handled response for a valid PHY: keep the current regdomain and
+complete the pending update.
+
+[SBE1V1K: reduced form of the earlier 953-wifi-ath12k-handle-empty-regulatory-events
+ (author Jackie264 / Yang Zhengguo; body from
+ https://github.com/OneNAS-space/Askey_Spectrum_SBE1V1K/blob/b6fc7b1f43e7cd6b37373bda8442cb183992e55b/package/kernel/mac80211/patches/ath12k/106-wifi-ath12k-handle-empty-regulatory-events.patch).
+ Its other half, assigning pdev_idx before validation so the DROP path
+ completes the waiter, is now upstream as ath.git f2576dc0f894
+ ("wifi: ath12k: signal regd update completion when reg event is dropped",
+ 908 here). This keeps only the empty-event case, which upstream does not
+ handle, and drops the duplicated status/metadata parsing.
+ Ref: https://github.com/openwrt/openwrt/issues/24949]
+---
+--- a/drivers/net/wireless/ath/ath12k/wmi.c
++++ b/drivers/net/wireless/ath/ath12k/wmi.c
+@@ -6055,8 +6055,12 @@ static int ath12k_pull_reg_chan_list_ext_update_ev(struct ath12k_base *ab,
+ 	}
+ 
+ 	if (!total_reg_rules) {
+-		ath12k_warn(ab, "No reg rules available\n");
+-		return -EINVAL;
++		/* Firmware answers some set-country requests with an event
++		 * that carries no rules. Report which PHY it was for, so the
++		 * caller can finish the pending regulatory update.
++		 */
++		reg_info->phy_id = le32_to_cpu(ev->phy_id);
++		return -ENODATA;
+ 	}
+ 
+ 	memcpy(reg_info->alpha2, &ev->alpha2, REG_ALPHA2_LEN);
+@@ -6977,6 +6981,15 @@ static int ath12k_reg_chan_list_event(struct ath12k_base *ab, struct sk_buff *sk
+ 	}
+ 
+ 	ret = ath12k_pull_reg_chan_list_ext_update_ev(ab, skb, reg_info);
++	if (ret == -ENODATA && reg_info->phy_id < ab->num_radios) {
++		/* Keep the current regdomain, but complete the update. */
++		ath12k_warn(ab, "no reg rules for phy %u, keeping current regdomain\n",
++			    reg_info->phy_id);
++		pdev_idx = reg_info->phy_id;
++		ret = ATH12K_REG_STATUS_VALID;
++		goto mem_free;
++	}
++
+ 	if (ret) {
+ 		ath12k_warn(ab, "failed to extract regulatory info from received event\n");
+ 		goto mem_free;
