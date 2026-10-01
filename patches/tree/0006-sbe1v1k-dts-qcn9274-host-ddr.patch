@@ -1,0 +1,86 @@
+Subject: [PATCH] qualcommbe: sbe1v1k: reserve host DDR for the QCN9274 radios
+
+Add the firmware memory regions of the stock QSDK device tree: 50 MiB of
+host DDR per QCN9274 (pcie1 @ 0x50f00000, pcie2 @ 0x54100000,
+pcie3 @ 0x57300000) and an 18 MiB MLO global memory region shared by the
+WSI group, and reference them from the three wifi nodes as
+"host-ddr-mem" and "mlo-global-mem".
+
+With these properties, ath12k patch 978 gives the firmware its memory
+from these regions instead of 2 MB coherent DMA chunks. Without patch 978
+the properties are ignored by ath12k, but the 168 MiB stay reserved.
+
+Region names and addresses follow
+https://cnb.cool/minihuber/SBE1V1K_immortalwrt_NSS
+target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts (taken from the stock
+Askey DTB); the MLO region size is the stock mlo_global_mem_0 size
+(0x1200000; the NSS tree used 0x1100000). It is allocated dynamically.
+
+Test tier.
+---
+--- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
++++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+@@ -29,6 +29,33 @@
+ 		tzapp:tzapp@49B00000 {
+ 			no-map;
+ 			reg = <0x0 0x49B00000 0x0 0x00600000>;
++		};
++
++		/*
++		 * QCN9274 firmware memory, as in the stock QSDK device tree:
++		 * 50 MiB of host DDR per radio and one MLO global memory
++		 * region shared by the WSI group. Used by ath12k patch
++		 * 978-wifi-ath12k-use-reserved-host-DDR-for-PCI-devices.
++		 */
++		qcn9224_pcie1: qcn9224-pcie1@50f00000 {
++			no-map;
++			reg = <0x0 0x50f00000 0x0 0x03200000>;
++		};
++
++		qcn9224_pcie2: qcn9224-pcie2@54100000 {
++			no-map;
++			reg = <0x0 0x54100000 0x0 0x03200000>;
++		};
++
++		qcn9224_pcie3: qcn9224-pcie3@57300000 {
++			no-map;
++			reg = <0x0 0x57300000 0x0 0x03200000>;
++		};
++
++		mlo_global_mem0: mlo-global-mem0 {
++			no-map;
++			size = <0x0 0x01200000>;
++			alignment = <0x0 0x00100000>;
+ 		};
+ 	};
+ 
+@@ -595,6 +622,9 @@
+ 			reg = <0x0 0x0 0x0 0x0 0x0>;
+ 			qcom,calibration-variant = "Askey-SBE1V1K_1";
+ 
++			memory-region = <&qcn9224_pcie1>, <&mlo_global_mem0>;
++			memory-region-names = "host-ddr-mem", "mlo-global-mem";
++
+ 			nvmem-cells = <&ethaddr (-3)>;
+ 			nvmem-cell-names = "mac-address";
+ 
+@@ -647,6 +677,9 @@
+ 			qcom,calibration-variant = "Askey-SBE1V1K_4";
+ 			qcom,wsi-controller;
+ 
++			memory-region = <&qcn9224_pcie2>, <&mlo_global_mem0>;
++			memory-region-names = "host-ddr-mem", "mlo-global-mem";
++
+ 			nvmem-cells = <&ethaddr (-1)>;
+ 			nvmem-cell-names = "mac-address";
+ 
+@@ -699,6 +732,9 @@
+ 			reg = <0x0 0x0 0x0 0x0 0x0>;
+ 			qcom,calibration-variant = "Askey-SBE1V1K_2";
+ 
++			memory-region = <&qcn9224_pcie3>, <&mlo_global_mem0>;
++			memory-region-names = "host-ddr-mem", "mlo-global-mem";
++
+ 			nvmem-cells = <&ethaddr (-2)>;
+ 			nvmem-cell-names = "mac-address";
+ 

@@ -1,0 +1,287 @@
+Subject: [PATCH] wifi: ath12k: use reserved host DDR for PCI devices
+
+QCN9274 firmware first asks for one large contiguous host DDR segment
+(28 MiB on SBE1V1K). Without CMA, dma_alloc_coherent() cannot satisfy it,
+so the firmware retries with 2 MB chunks scattered over memory. The
+vendor platform driver instead hands the firmware a reserved region per
+device and a shared MLO global memory region, at fixed addresses.
+
+When the device node of a PCI device names a "host-ddr-mem" region in
+memory-region-names, set ATH12K_FLAG_FIXED_MEM_REGION and place every
+segment the host supports (host DDR, M3 dump, pageable, CALDB, LPASS
+shared, AFC) in that region, each 64 KB aligned. MLO global memory comes
+from the "mlo-global-mem" region, which every device of the WSI group
+references: it is mapped once into ag->mlo_mem.chunk[0] and each segment
+is placed at its cumulative offset, so all devices give their firmware
+the same physical addresses. Clear the MLO memory with memset_io(), as it
+is now an ioremap()ed region. Devices without the DT regions keep the
+dynamic allocation.
+
+[SBE1V1K: test tier. Rewritten for backports 7.2 after
+ https://cnb.cool/minihuber/SBE1V1K_immortalwrt_NSS
+ package/kernel/mac80211/patches/ath12k/317-ath12k-use-reserved-pci-host-ddr.patch
+ and 315-ath12k-share-fixed-mlo-memory.patch (JiaY-shi <shi05275@163.com>).
+ Differences: PCI only (the IPQ5332/AHB mixed-group parts of 315 are not
+ needed), AFC (955) and LPASS segments are placed in the region instead of
+ being given a NULL address, segments are 64 KB aligned as in 977, a
+ repeated memory request after a firmware restart unmaps the previous
+ mappings instead of leaking them, and the flag is set in ath12k_pci_probe().
+ Without the DT properties (patches/tree/0006) this code is never used.]
+---
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -664,6 +664,19 @@ struct reserved_mem *ath12k_core_get_reserved_mem(struct ath12k_base *ab,
+ 	return rmem;
+ }
+ 
++struct reserved_mem *ath12k_core_get_reserved_mem_byname(struct ath12k_base *ab,
++							  const char *name)
++{
++	int index;
++
++	index = of_property_match_string(ab->dev->of_node,
++					 "memory-region-names", name);
++	if (index < 0)
++		return NULL;
++
++	return ath12k_core_get_reserved_mem(ab, index);
++}
++
+ static inline
+ void ath12k_core_to_group_ref_get(struct ath12k_base *ab)
+ {
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -888,6 +888,7 @@ struct ath12k_mlo_memory {
+ 	struct target_mem_chunk chunk[ATH12K_QMI_WLANFW_MAX_NUM_MEM_SEG_V01];
+ 	int mlo_mem_size;
+ 	bool init_done;
++	bool fixed_mem;
+ };
+ 
+ struct ath12k_hw_link {
+@@ -1304,6 +1305,8 @@ void ath12k_fw_stats_free(struct ath12k_fw_stats *stats);
+ void ath12k_fw_stats_reset(struct ath12k *ar);
+ struct reserved_mem *ath12k_core_get_reserved_mem(struct ath12k_base *ab,
+ 						  int index);
++struct reserved_mem *ath12k_core_get_reserved_mem_byname(struct ath12k_base *ab,
++							  const char *name);
+ enum ath12k_qmi_mem_mode ath12k_core_get_memory_mode(struct ath12k_base *ab);
+ 
+ static inline const char *ath12k_scan_state_str(enum ath12k_scan_state state)
+--- a/drivers/net/wireless/ath/ath12k/pci.c
++++ b/drivers/net/wireless/ath/ath12k/pci.c
+@@ -1572,6 +1572,13 @@ static int ath12k_pci_probe(struct pci_dev *pdev,
+ 	pci_set_drvdata(pdev, ab);
+ 	spin_lock_init(&ab_pci->window_lock);
+ 
++	/* Give the firmware its memory from a DT reserved region, as the
++	 * vendor platform driver does, instead of coherent DMA chunks.
++	 */
++	if (of_property_match_string(pdev->dev.of_node, "memory-region-names",
++				     "host-ddr-mem") >= 0)
++		set_bit(ATH12K_FLAG_FIXED_MEM_REGION, &ab->dev_flags);
++
+ 	ret = ath12k_pci_claim(ab_pci, pdev);
+ 	if (ret) {
+ 		ath12k_err(ab, "failed to claim device: %d\n", ret);
+--- a/drivers/net/wireless/ath/ath12k/qmi.c
++++ b/drivers/net/wireless/ath/ath12k/qmi.c
+@@ -2497,11 +2497,16 @@ void ath12k_qmi_reset_mlo_mem(struct ath12k_hw_group *ag)
+ 	for (i = 0; i < ARRAY_SIZE(ag->mlo_mem.chunk); i++) {
+ 		mlo_chunk = &ag->mlo_mem.chunk[i];
+ 
+-		if (mlo_chunk->v.addr)
+-			/* TODO: Mode 0 recovery is the default mode hence resetting the
+-			 * whole memory region for now. Once Mode 1 support is added, this
+-			 * needs to be handled properly
+-			 */
++		if (!mlo_chunk->v.addr)
++			continue;
++
++		/* TODO: Mode 0 recovery is the default mode hence resetting the
++		 * whole memory region for now. Once Mode 1 support is added, this
++		 * needs to be handled properly
++		 */
++		if (ag->mlo_mem.fixed_mem)
++			memset_io(mlo_chunk->v.ioaddr, 0, mlo_chunk->size);
++		else
+ 			memset(mlo_chunk->v.addr, 0, mlo_chunk->size);
+ 	}
+ }
+@@ -2774,12 +2779,175 @@ err:
+ 	return ret;
+ }
+ 
++/* All devices of the group share one MLO global memory region from DT. It
++ * is mapped once into ag->mlo_mem.chunk[0], and each MLO segment of a
++ * device is placed at its cumulative offset, so every device hands its
++ * firmware the same physical addresses.
++ */
++static int ath12k_qmi_assign_fixed_mlo_mem(struct ath12k_base *ab,
++					   struct target_mem_chunk *chunk,
++					   u32 offset)
++{
++	struct ath12k_hw_group *ag = ab->ag;
++	struct target_mem_chunk *mlo_chunk = &ag->mlo_mem.chunk[0];
++	struct reserved_mem *rmem;
++
++	lockdep_assert_held(&ag->mutex);
++
++	if (mlo_chunk->v.ioaddr && !ag->mlo_mem.fixed_mem) {
++		ath12k_err(ab, "MLO memory already allocated dynamically by a group member\n");
++		return -EINVAL;
++	}
++
++	if (!mlo_chunk->v.ioaddr) {
++		rmem = ath12k_core_get_reserved_mem_byname(ab, "mlo-global-mem");
++		if (!rmem) {
++			ath12k_err(ab, "no mlo-global-mem reserved memory region\n");
++			return -ENODEV;
++		}
++
++		mlo_chunk->v.ioaddr = ioremap(rmem->base, rmem->size);
++		if (!mlo_chunk->v.ioaddr)
++			return -EIO;
++
++		mlo_chunk->paddr = rmem->base;
++		mlo_chunk->size = rmem->size;
++		mlo_chunk->type = MLO_GLOBAL_MEM_REGION_TYPE;
++		ag->mlo_mem.fixed_mem = true;
++		memset_io(mlo_chunk->v.ioaddr, 0, mlo_chunk->size);
++	}
++
++	if (offset > mlo_chunk->size || chunk->size > mlo_chunk->size - offset) {
++		ath12k_err(ab, "MLO memory request (offset %u size %u) exceeds reserved size %u\n",
++			   offset, chunk->size, mlo_chunk->size);
++		return -ENOMEM;
++	}
++
++	chunk->paddr = mlo_chunk->paddr + offset;
++	chunk->v.ioaddr = mlo_chunk->v.ioaddr + offset;
++
++	return 0;
++}
++
++/* PCI devices with a "host-ddr-mem" region: place every segment the host
++ * supports in that region (64 KB aligned) and MLO global memory in the
++ * shared "mlo-global-mem" region.
++ */
++static int ath12k_qmi_assign_pci_target_mem_chunk(struct ath12k_base *ab)
++{
++	struct ath12k_hw_group *ag = ab->ag;
++	struct target_mem_chunk *chunk;
++	struct reserved_mem *rmem;
++	phys_addr_t offset = 0;
++	int i, ret, mlo_size = 0;
++
++	rmem = ath12k_core_get_reserved_mem_byname(ab, "host-ddr-mem");
++	if (!rmem)
++		return -ENODEV;
++
++	mutex_lock(&ag->mutex);
++
++	if (!ag->mlo_mem.init_done) {
++		memset(ag->mlo_mem.chunk, 0, sizeof(ag->mlo_mem.chunk));
++		ag->mlo_mem.init_done = true;
++		ag->mlo_mem.fixed_mem = false;
++	}
++
++	/* The firmware asks again after a restart: drop the mappings of the
++	 * previous request. MLO segments point into the shared mapping and
++	 * are not unmapped here.
++	 */
++	for (i = 0; i < ab->qmi.mem_seg_count; i++) {
++		chunk = &ab->qmi.target_mem[i];
++
++		if (chunk->v.ioaddr &&
++		    chunk->prev_type != MLO_GLOBAL_MEM_REGION_TYPE)
++			iounmap(chunk->v.ioaddr);
++		chunk->v.ioaddr = NULL;
++		chunk->paddr = 0;
++		chunk->prev_type = chunk->type;
++	}
++
++	for (i = 0; i < ab->qmi.mem_seg_count; i++) {
++		chunk = &ab->qmi.target_mem[i];
++
++		switch (chunk->type) {
++		case HOST_DDR_REGION_TYPE:
++		case M3_DUMP_REGION_TYPE:
++		case PAGEABLE_MEM_REGION_TYPE:
++		case CALDB_MEM_REGION_TYPE:
++		case LPASS_SHARED_V01_REGION_TYPE:
++		case AFC_REGION_TYPE:
++			offset = ALIGN(offset, SZ_64K);
++			if (offset > rmem->size || chunk->size > rmem->size - offset) {
++				ath12k_err(ab, "host-ddr-mem too small for type %u size %u at offset %pa\n",
++					   chunk->type, chunk->size, &offset);
++				ret = -ENOMEM;
++				goto err;
++			}
++
++			chunk->paddr = rmem->base + offset;
++			chunk->v.ioaddr = ioremap(chunk->paddr, chunk->size);
++			if (!chunk->v.ioaddr) {
++				chunk->paddr = 0;
++				ret = -EIO;
++				goto err;
++			}
++			offset += chunk->size;
++			break;
++		case MLO_GLOBAL_MEM_REGION_TYPE:
++			mlo_size += chunk->size;
++			if (ag->mlo_mem.mlo_mem_size &&
++			    mlo_size > ag->mlo_mem.mlo_mem_size) {
++				ath12k_err(ab, "QMI MLO memory request %d exceeds group size %d\n",
++					   mlo_size, ag->mlo_mem.mlo_mem_size);
++				ret = -EINVAL;
++				goto err;
++			}
++
++			ret = ath12k_qmi_assign_fixed_mlo_mem(ab, chunk,
++							      mlo_size - chunk->size);
++			if (ret)
++				goto err;
++			break;
++		default:
++			ath12k_warn(ab, "memory type %u not supported\n",
++				    chunk->type);
++			break;
++		}
++	}
++
++	if (!ag->mlo_mem.mlo_mem_size) {
++		ag->mlo_mem.mlo_mem_size = mlo_size;
++	} else if (ag->mlo_mem.mlo_mem_size != mlo_size) {
++		ath12k_err(ab, "QMI MLO memory size error, expected size is %d but requested size is %d\n",
++			   ag->mlo_mem.mlo_mem_size, mlo_size);
++		ret = -EINVAL;
++		goto err;
++	}
++
++	mutex_unlock(&ag->mutex);
++
++	ath12k_info(ab, "using reserved host-ddr-mem %pa (%pa bytes used of %pa)\n",
++		    &rmem->base, &offset, &rmem->size);
++
++	return 0;
++
++err:
++	ath12k_qmi_free_target_mem_chunk(ab);
++	mutex_unlock(&ag->mutex);
++	return ret;
++}
++
+ static int ath12k_qmi_assign_target_mem_chunk(struct ath12k_base *ab)
+ {
+ 	struct reserved_mem *rmem;
+ 	size_t avail_rmem_size;
+ 	int i, idx, ret;
+ 
++	if (ab->hif.bus == ATH12K_BUS_PCI)
++		return ath12k_qmi_assign_pci_target_mem_chunk(ab);
++
+ 	for (i = 0, idx = 0; i < ab->qmi.mem_seg_count; i++) {
+ 		switch (ab->qmi.target_mem[i].type) {
+ 		case HOST_DDR_REGION_TYPE:
