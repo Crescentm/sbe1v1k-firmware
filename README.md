@@ -36,7 +36,10 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 - **已经在跑 OpenWrt / ImmortalWrt**：在路由器上用 `sysupgrade` 刷 `*-squashfs-sysupgrade.bin`，可以保留配置。
   支持 mainline（`0:HLOS`）和 HTTP U-Boot 的 large 两种分区布局。
 - **测试**：`*-initramfs-uImage.itb` 可以只在内存中启动，不写 eMMC。
-- 固件下载见 [Releases](https://github.com/Crescentm/sbe1v1k-firmware/releases)。
+- 固件下载见 [Releases](https://github.com/Crescentm/sbe1v1k-firmware/releases)：
+  - **正式版本**：经过实机测试，软件源永久保留，建议刷这个；
+  - **Pre-release**：CI 的日常构建，软件源只保留最近 3 个版本。刷了日常构建的固件，
+    在它的软件源被清理后就装不了新的内核模块，需要升级到更新的固件。
 
 升级前请先备份配置（`sysupgrade -b`）。全新安装时 ImmortalWrt 的默认设置是开放 WiFi、root 无密码，
 请立即设置密码和 WiFi 加密。

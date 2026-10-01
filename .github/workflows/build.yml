@@ -94,13 +94,18 @@ jobs:
             echo
             echo "Package feed: https://crescentm.github.io/sbe1v1k-packages/$release/"
             echo "(published by sbe1v1k-packages shortly after this release)."
+            echo
+            echo "This is a daily build: its feed is kept for the 3 newest builds only."
+            echo "Stable releases (not marked pre-release) keep their feed permanently."
             if [ -s failed-packages.txt ]; then
               echo
               echo "Feed-only packages that failed to build:"
               echo '```'; cat failed-packages.txt; echo '```'
             fi
           } > notes.md
-          gh release create "$release" -R "${{ github.repository }}" \
+          # Every build is a pre-release; the feed keeps only the newest few.
+          # Promote a tested build with: gh release edit <tag> --prerelease=false
+          gh release create "$release" -R "${{ github.repository }}" --prerelease \
             --target "${{ github.sha }}" --title "$release" --notes-file notes.md \
             *.bin *.itb *.manifest sha256sums *.buildinfo profiles.json \
             "feed-$release.tar.zst"
