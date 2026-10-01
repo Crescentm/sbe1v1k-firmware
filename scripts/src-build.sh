@@ -9,12 +9,17 @@
 #   FEED_URL=https://...     where this build's packages will be published
 #   RELEASE=name             feed directory for this build (default:
 #                            <ImmortalWrt version>-<firmware repo commit>)
+#   TEST=1                   images only, for a RAM boot test: no
+#                            CONFIG_ALL_KMODS and no package feed. Its
+#                            kernel config differs from a full build, so
+#                            the release feed does not fit this image.
 set -eu
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 SRC=${SRC:-$HOME/owrt/immortalwrt}
 JOBS=${JOBS:-$(nproc)}
 STAGE=${STAGE:-all}
+TEST=${TEST:-0}
 OUT=${OUT:-$REPO/out/src-$(date +%Y%m%d-%H%M%S)}
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -82,7 +87,11 @@ find files \( -name '._*' -o -name .DS_Store \) -delete
 
 log "configuring"
 {
-	cat "$REPO/config/seed.config"
+	if [ "$TEST" = 1 ]; then
+		grep -v '^CONFIG_ALL_KMODS=' "$REPO/config/seed.config"
+	else
+		cat "$REPO/config/seed.config"
+	fi
 	grep -v -E '^[[:space:]]*(#|$)' "$REPO/packages.txt" |
 		sed 's/^\(.*\)$/CONFIG_PACKAGE_\1=y/'
 } > .config
@@ -136,6 +145,17 @@ log "make output: $SRC/build-make.log"
 if ! make -j"$JOBS" IGNORE_ERRORS=m > "$SRC/build-make.log" 2>&1; then
 	grep 'ERROR: package' "$SRC/build-make.log" || tail -30 "$SRC/build-make.log"
 	die "build failed"
+fi
+
+if [ "$TEST" = 1 ]; then
+	mkdir -p "$OUT"
+	for f in bin/targets/qualcommbe/ipq95xx/*; do
+		[ "$(basename "$f")" = packages ] || cp -a "$f" "$OUT/"
+	done
+	echo "$RELEASE (test build)" > "$OUT/release"
+	log "output: $OUT"
+	ls "$OUT"
+	exit 0
 fi
 
 for f in targets/qualcommbe/ipq95xx/packages $(for g in $our_feeds; do
