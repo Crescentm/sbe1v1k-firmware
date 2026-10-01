@@ -1,0 +1,69 @@
+diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+index f39badf135..fc5dadb29c 100644
+--- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
++++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+@@ -171,26 +171,40 @@
+ 	status = "okay";
+ };
+ 
++/*
++ * No driver binds the QCE crypto engine (CRYPTO_DEV_QCE is disabled). An
++ * enabled but unbound consumer keeps the GCC interconnect provider from
++ * reaching sync_state(), which also stalls cpufreq. Upstream only did this
++ * for kiwi-dvk.
++ */
++&crypto {
++	status = "disabled";
++};
++
++&cryptobam {
++	status = "disabled";
++};
++
+ &rpm_requests {
+ 	regulators {
+ 		compatible = "qcom,rpm-mp5496-regulators";
+ 
+-		ipq9574_s1: s1 {
+ 		/*
+-		* During kernel bootup, the SoC runs at 800MHz with 875mV set by the bootloaders.
+-		* During regulator registration, kernel not knowing the initial voltage,
+-		* considers it as zero and brings up the regulators with minimum supported voltage.
+-		* Update the regulator-min-microvolt with SVS voltage of 725mV so that
+-		* the regulators are brought up with 725mV which is sufficient for all the
+-		* corner parts to operate at 800MHz
+-		*/
+-			regulator-min-microvolt = <725000>;
++		 * Values from the stock SBE1V1K device tree (SCP_1.0.5 HLOS and
++		 * QSDK 12.5). The stock tree has no l5: requesting it from RPM
++		 * fails with -ENXIO, which also leaves s1 unregistered and keeps
++		 * cpufreq-dt in deferred probe (CPU stuck at the boot clock).
++		 */
++		ipq9574_s1: s1 {
++			regulator-min-microvolt = <587500>;
+ 			regulator-max-microvolt = <1075000>;
++			regulator-always-on;
++			regulator-boot-on;
+ 		};
+ 
+-		mp5496_l5: l5 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <1800000>;
++		ipq9574_s2: s2 {
++			regulator-min-microvolt = <700000>;
++			regulator-max-microvolt = <1000000>;
+ 			regulator-always-on;
+ 			regulator-boot-on;
+ 		};
+@@ -497,6 +511,11 @@
+ 		reg = <16>;
+ 
+ 		qcom,package-mode = "qsgmii";
++		/*
++		 * Match the 300 mV PQSGMII TX amplitude programmed by the stock
++		 * SSDK; the 600 mV default causes RX CRC errors on PPE port 3.
++		 */
++		qcom,tx-drive-strength-milliwatt = <300>;
+ 
+ 		qca8075_18: ethernet-phy@18 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";

@@ -1,0 +1,19 @@
+#!/bin/sh
+# SBE1V1K defaults, applied once per device (marker kept in /etc/config/system
+# so a later choice by the user survives sysupgrade). Runs after
+# 99-default-settings, which enables packet steering.
+
+uci -q get system.@imm_init[0] >/dev/null || uci -q add system imm_init >/dev/null
+
+# Packet steering makes ath12k drop clients under heavy load (OpenWrt forum
+# thread 245244, post 243); irqbalance spreads the IRQs instead.
+if ! uci -q get system.@imm_init[0].sbe1v1k_packet_steering >/dev/null; then
+	uci -q set network.@globals[0].packet_steering='0'
+	uci -q set irqbalance.irqbalance.enabled='1'
+	uci -q set system.@imm_init[0].sbe1v1k_packet_steering='0'
+	uci -q commit network
+	uci -q commit irqbalance
+	uci -q commit system
+fi
+
+exit 0

@@ -1,0 +1,36 @@
+# Extra packages on top of the ImageBuilder default + askey_sbe1v1k profile.
+# One per line; "-pkg" removes a default package.
+
+# LuCI (Chinese UI) and ImmortalWrt China defaults (timezone, language, mirror)
+luci
+luci-i18n-base-zh-cn
+luci-i18n-firewall-zh-cn
+luci-i18n-package-manager-zh-cn
+default-settings-chn
+autocore
+
+# NAT / offload: full-cone NAT for CGNAT + STUN, UPnP for P2P apps
+kmod-nft-fullcone
+luci-app-upnp
+luci-i18n-upnp-zh-cn
+irqbalance
+luci-app-irqbalance
+luci-i18n-irqbalance-zh-cn
+
+# Queue management
+luci-app-sqm
+luci-i18n-sqm-zh-cn
+kmod-sched-cake
+
+# VPN building blocks
+kmod-tun
+wireguard-tools
+luci-proto-wireguard
+
+# Diagnostics
+iperf3
+ethtool-full
+tcpdump-mini
+htop
+curl
+pciutils

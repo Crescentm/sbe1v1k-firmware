@@ -1,0 +1,34 @@
+Subject: [PATCH] wifi: ath12k: allocate QMI AFC memory region (type 0xA)
+
+QCN9274 WLAN.WBE.1.6 firmware requests a target memory segment of type
+0xA (AFC_REGION_TYPE in the QCA downstream driver).  ath12k does not know
+this type and hands the firmware a NULL chunk for it.  This is carried
+for the intermittent WMI init failures seen on SBE1V1K WSI radios.
+
+Name the region type and allocate it like the other plain DMA regions.
+
+[SBE1V1K: re-created from https://github.com/OneNAS-space/Askey_Spectrum_SBE1V1K/blob/b6fc7b1f43e7cd6b37373bda8442cb183992e55b/package/kernel/mac80211/patches/ath12k/701-wifi-ath12k-support-memory-type-10.patch
+ / https://github.com/Jackie264/SBE1V1K/blob/b8bbbe7cc9c8140a8dd53fd1a9d410bc8195bd0c/package/kernel/mac80211/patches/ath12k/701-ath12k-support-memory-type-10.patch (author: Jackie <jackie.han@gmail.com>),
+ which used a bare "case 10:" (and space indentation in the Jackie264/SBE1V1K copy).
+ Ref: https://github.com/openwrt/openwrt/issues/24949]
+---
+--- a/drivers/net/wireless/ath/ath12k/qmi.c
++++ b/drivers/net/wireless/ath/ath12k/qmi.c
+@@ -2651,6 +2651,7 @@ static int ath12k_qmi_alloc_target_mem_chunk(struct ath12k_base *ab)
+ 		case PAGEABLE_MEM_REGION_TYPE:
+ 		case CALDB_MEM_REGION_TYPE:
+ 		case LPASS_SHARED_V01_REGION_TYPE:
++		case AFC_REGION_TYPE:
+ 			ret = ath12k_qmi_alloc_chunk(ab, chunk);
+ 			if (ret)
+ 				goto err;
+--- a/drivers/net/wireless/ath/ath12k/qmi.h
++++ b/drivers/net/wireless/ath/ath12k/qmi.h
+@@ -178,6 +178,7 @@ enum ath12k_qmi_target_mem {
+ 	CALDB_MEM_REGION_TYPE = 0x4,
+ 	MLO_GLOBAL_MEM_REGION_TYPE = 0x8,
+ 	PAGEABLE_MEM_REGION_TYPE = 0x9,
++	AFC_REGION_TYPE = 0xa,
+ 	LPASS_SHARED_V01_REGION_TYPE = 0xb,
+ };
+ 

@@ -1,0 +1,32 @@
+From: Rajat Soni <quic_rajson@quicinc.com>
+Date: Mon, 30 Oct 2023 15:26:48 -0700
+Subject: [PATCH] wifi: ath12k: support CV upload direct buffer module
+
+Firmware can advertise direct-buffer module ID 2 for
+WMI_CONFIG_MODULE_CV_UPLOAD.  Without the corresponding host enum value,
+ath12k rejects the service-ready capability and fails the complete TLV
+parse.
+
+This was tested upstream on QCN9274 and is also required by the SBE1V1K
+QCN9274 firmware WLAN.WBE.1.6-01243-QCAHKSWPL_SILICONZ-1.
+
+Tested-on: QCN9274 hw2.0 PCI WLAN.WBE.1.1.1-00188-QCAHKSWPL_SILICONZ-1
+Tested-on: QCN9274 hw2.0 PCI WLAN.WBE.1.0.1-00029-QCAHKSWPL_SILICONZ-1
+Signed-off-by: Rajat Soni <quic_rajson@quicinc.com>
+Signed-off-by: Raj Kumar Bhagat <quic_rajkbhag@quicinc.com>
+Link: https://lists.infradead.org/pipermail/ath12k/2023-October/000889.html
+
+[SBE1V1K: body from https://github.com/OneNAS-space/Askey_Spectrum_SBE1V1K/blob/b6fc7b1f43e7cd6b37373bda8442cb183992e55b/package/kernel/mac80211/patches/ath12k/105-wifi-ath12k-support-CV-upload-direct-buffer-module.patch
+ (rebased on backports 7.2), header from https://github.com/Jackie264/SBE1V1K/blob/b8bbbe7cc9c8140a8dd53fd1a9d410bc8195bd0c/package/kernel/mac80211/patches/ath12k/105-wifi-ath12k-support-CV-upload-direct-buffer-module.patch
+ Ref: https://github.com/openwrt/openwrt/issues/24949]
+---
+--- a/drivers/net/wireless/ath/ath12k/wmi.h
++++ b/drivers/net/wireless/ath/ath12k/wmi.h
+@@ -2370,6 +2370,7 @@ enum wmi_beacon_gen_mode {
+ enum wmi_direct_buffer_module {
+ 	WMI_DIRECT_BUF_SPECTRAL = 0,
+ 	WMI_DIRECT_BUF_CFR = 1,
++	WMI_DIRECT_BUF_CV_UPLOAD = 2,
+ 
+ 	/* keep it last */
+ 	WMI_DIRECT_BUF_MAX

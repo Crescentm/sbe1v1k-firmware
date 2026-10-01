@@ -1,0 +1,34 @@
+From: Yang Zhengguo <yangzhgg@gmail.com>
+Date: Sat, 15 Aug 2026 18:31:00 +0800
+Subject: [PATCH] wifi: ath12k: limit WMI endpoints to QMI PHY count
+
+The hardware parameters describe the maximum number of radios a device can
+support, while the QMI PHY capability response reports how many local PHYs
+the running firmware actually exposes.  Using only the maximum causes
+single-PHY QCN9274 firmware to split HTC credits across two WMI endpoints
+and attempt a WMI_CONTROL_MAC1 connection which the firmware rejects
+("HTC Service WMI MAC1 connect request failed: 0x1",
+"failed to connect to WMI CONTROL service status: -71").
+
+Clamp the endpoint count to a valid QMI PHY count before HTC credit
+allocation.  Keep the existing hardware-mode fallback when QMI did not
+provide a usable count.
+
+Signed-off-by: Yang Zhengguo <yangzhgg@gmail.com>
+
+[SBE1V1K: body from https://github.com/OneNAS-space/Askey_Spectrum_SBE1V1K/blob/b6fc7b1f43e7cd6b37373bda8442cb183992e55b/package/kernel/mac80211/patches/ath12k/110-wifi-ath12k-limit-WMI-endpoints-to-QMI-PHY-count.patch
+ header from https://github.com/Jackie264/SBE1V1K/blob/b8bbbe7cc9c8140a8dd53fd1a9d410bc8195bd0c/package/kernel/mac80211/patches/ath12k/110-wifi-ath12k-limit-WMI-endpoints-to-QMI-PHY-count.patch
+ Ref: https://github.com/openwrt/openwrt/issues/24949]
+---
+--- a/drivers/net/wireless/ath/ath12k/htc.c
++++ b/drivers/net/wireless/ath/ath12k/htc.c
+@@ -776,6 +776,9 @@ int ath12k_htc_init(struct ath12k_base *ab)
+ 		htc->wmi_ep_count = ab->hw_params->max_radios;
+ 		break;
+ 	}
++	if (ab->qmi.num_radios > 0 && ab->qmi.num_radios != U8_MAX)
++		htc->wmi_ep_count = min_t(u8, htc->wmi_ep_count,
++					  ab->qmi.num_radios);
+ 
+ 	/* setup our pseudo HTC control endpoint connection */
+ 	conn_req.ep_ops.ep_tx_complete = ath12k_htc_control_tx_complete;

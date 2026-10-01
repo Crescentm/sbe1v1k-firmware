@@ -1,0 +1,99 @@
+Subject: [PATCH] wifi-scripts: never apply the world placeholder country '00'
+
+ImmortalWrt's mac80211.uc writes country='00' for 6 GHz radios on first
+boot and enables all interfaces. With a single multi-radio wiphy this
+breaks every band:
+
+ - setup_phy runs "iw reg set 00" for the 6 GHz radio, resetting the
+   regdomain the 2.4/5 GHz radios already use;
+ - device_country_code() copies the country of the last radio in the
+   netifd status into every hostapd config, so all BSSes get
+   country_code=00, which hostapd rejects.
+
+Ignore '00' in setup_phy, prefer the radio's own country in hostapd.uc,
+otherwise fall back to the first real country configured on any radio,
+and never emit country_code=00. A 6 GHz radio without a valid country
+logs a hint instead.
+
+Same idea as the SBE1V1K_immortalwrt_NSS fix (commit 32136c496d,
+https://cnb.cool/minihuber/SBE1V1K_immortalwrt_NSS), written as a
+minimal change.
+---
+  files-ucode/lib/netifd/wireless/mac80211.sh |  9 +++++-
+  files-ucode/usr/share/ucode/wifi/hostapd.uc | 36 +++++++++++++++++----
+  2 files changed, 37 insertions(+), 8 deletions(-)
+
+--- a/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -70,7 +70,14 @@ function setup_phy(phy, config, data) {
+ 	config.channel = +config.channel;
+ 	config.frequency = get_channel_frequency(config.band, config.channel);
+ 
+-	if (config.country_code) {
++	/*
++	 * '00' is the world regdomain placeholder (written e.g. for 6 GHz radios
++	 * on first boot), not a country. Setting it would reset the regdomain
++	 * that the other radios of a shared multi-radio wiphy rely on.
++	 */
++	if (config.country_code == '00') {
++		log(`Ignoring world regdomain placeholder country '00' for ${phy}${phy_suffix(config.radio, ":")}`);
++	} else if (config.country_code) {
+ 		log(`Setting country code to ${config.country_code}`);
+ 		system(`iw reg set ${config.country_code}`);
+ 	}
+--- a/files-ucode/usr/share/ucode/wifi/hostapd.uc
++++ b/files-ucode/usr/share/ucode/wifi/hostapd.uc
+@@ -2,7 +2,7 @@
+ 
+ import {
+ 	append, append_raw, append_vars, dump_config, flush_config, set_default,
+-	wiphy_info, wiphy_band
++	wiphy_info, wiphy_band, log
+ } from 'wifi.common';
+ import { validate } from 'wifi.validate';
+ import * as netifd from 'wifi.netifd';
+@@ -68,16 +68,38 @@ function device_log_append(config) {
+ }
+ 
+ /* setup country code */
++function valid_country(country) {
++	return country && country != '00';
++}
++
+ function device_country_code(config) {
+-	let status = global.ubus.call('network.wireless', 'status');
+-	for (let name, radio in status) {
+-		if (!radio.config.country)
+-			continue;
+-		config.country_code = radio.config.country;
++	/*
++	 * Prefer this radio's own country. Otherwise fall back to the first
++	 * real country configured on any radio. '00' (world placeholder) is
++	 * never emitted: hostapd rejects country_code=00, and before this
++	 * check a single 6 GHz radio with country '00' could push it into
++	 * the config of every radio sharing the wiphy.
++	 */
++	let country = config.country_code;
++	if (!valid_country(country)) {
++		country = null;
++		let status = global.ubus.call('network.wireless', 'status');
++		for (let name, radio in status) {
++			if (!valid_country(radio.config?.country))
++				continue;
++			country = radio.config.country;
++			break;
++		}
+ 	}
+ 
+-	if (!exists(config, 'country_code'))
++	if (!country) {
++		delete config.country_code;
++		if (config.band == '6g')
++			log('No valid country for 6 GHz radio, set wireless.<radio>.country');
+ 		return;
++	}
++
++	config.country_code = country;
+ 
+ 	if (config.hw_mode != 'a')
+ 		delete config.ieee80211h;

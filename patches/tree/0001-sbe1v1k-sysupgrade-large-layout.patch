@@ -1,0 +1,17 @@
+--- a/target/linux/qualcommbe/ipq95xx/base-files/lib/upgrade/platform.sh
++++ b/target/linux/qualcommbe/ipq95xx/base-files/lib/upgrade/platform.sh
+@@ -16,7 +16,13 @@
+ 		emmc_do_upgrade "$1"
+ 		;;
+ 	askey,sbe1v1k)
+-		CI_KERNPART="0:HLOS"
++		# The HTTP U-Boot "large" GPT boots from a dedicated "kernel"
++		# partition; the mainline/factory GPT uses 0:HLOS.
++		if [ -n "$(find_mmc_part kernel)" ]; then
++			CI_KERNPART="kernel"
++		else
++			CI_KERNPART="0:HLOS"
++		fi
+ 		CI_ROOTPART="rootfs"
+ 		CI_DATAPART="rootfs_data"
+ 		emmc_do_upgrade "$1"

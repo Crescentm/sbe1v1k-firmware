@@ -1,0 +1,38 @@
+Subject: [PATCH] wifi-scripts: use SAE / WPA3-EAP for WPA2-only 6 GHz APs
+
+WPA-PSK and WPA2-EAP AKMs are not allowed on 6 GHz and require PMF; a 6 GHz
+interface configured with psk2 (e.g. copied from the 2.4/5 GHz SSIDs)
+makes hostapd refuse the BSS. The ucode scripts already upgrade
+psk-sae -> sae and eap-eap2 -> eap2 on 6 GHz; do the same for plain
+psk -> sae and eap -> eap2 (WPA2 only), which in turn sets
+ieee80211w=2 (PMF required).
+
+Code equivalent of the SBE1V1K_immortalwrt_NSS first-boot uci-defaults
+script 99-sbe1v1k-6ghz-pmf (commit 534e227e70), applied at runtime so it
+also covers later config changes.
+---
+  files-ucode/usr/share/ucode/wifi/ap.uc | 13 +++++++++++++
+  1 file changed, 13 insertions(+)
+
+--- a/files-ucode/usr/share/ucode/wifi/ap.uc
++++ b/files-ucode/usr/share/ucode/wifi/ap.uc
+@@ -572,6 +572,19 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
+ 			config.auth_type = 'sae';
+ 		if (config.auth_type == 'eap-eap2')
+ 			config.auth_type = 'eap2';
++		/*
++		 * WPA/WPA2-PSK and WPA2-EAP are not allowed on 6 GHz and make
++		 * hostapd refuse the BSS. Upgrade them to SAE / WPA3-EAP (both
++		 * PMF required) with the same key / server settings.
++		 */
++		if (config.auth_type == 'psk') {
++			config.auth_type = 'sae';
++			config.wpa = 2;
++		}
++		if (config.auth_type == 'eap') {
++			config.auth_type = 'eap2';
++			config.wpa = 2;
++		}
+ 	}
+ 
+ 	if (config.auth_type in [ 'psk', 'psk-sae', 'psk-sae-compat' ] && data.config.band != '6g')

@@ -1,0 +1,128 @@
+Subject: [PATCH] wifi-scripts: resolve multi-radio index by band
+
+On single-wiphy multi-radio ath12k devices (WSI groups such as the Askey
+SBE1V1K, 3x QCN9274) the order of the radios inside the wiphy can change
+between boots, so a persisted wireless.radioN.radio index may point at a
+radio of a different band.
+
+Map the configured band to the radio whose frequency range covers it
+(nl80211 radio list) and only then derive phy_suffix / ifname_prefix from
+the resolved index. null / -1 (whole phy) are left untouched; if no radio
+matches, the configured index is kept.
+
+Based on OpenWrt PR #24639 by Jose Tejera (commit a3b3bb572f4c), with
+the review findings fixed: the resolution now happens before the phy
+suffix / interface prefix are derived, the whole-phy sentinel is kept,
+and disabled channels are not required to match (a world regdomain at
+first boot disables all 6 GHz channels).
+
+Link: https://github.com/openwrt/openwrt/pull/24639
+Link: https://github.com/openwrt/openwrt/issues/24370
+---
+  files-ucode/lib/netifd/wireless/mac80211.sh | 30 ++++++++++-----
+  files-ucode/usr/share/ucode/wifi/common.uc  | 41 +++++++++++++++++++++
+  2 files changed, 61 insertions(+), 10 deletions(-)
+
+--- a/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -2,7 +2,7 @@
+ 
+ 'use strict';
+ 
+-import { set_default, log } from 'wifi.common';
++import { set_default, log, wiphy_info, wiphy_radio } from 'wifi.common';
+ import { validate, dump_options } from 'wifi.validate';
+ import * as supplicant from 'wifi.supplicant';
+ import * as hostapd from 'wifi.hostapd';
+@@ -173,15 +173,6 @@ function setup() {
+ 		netifd.set_retry(false);
+ 		return 1;
+ 	}
+-	data.phy_suffix = phy_suffix(data.config.radio, ":");
+-	data.vif_phy_suffix = phy_suffix(data.config.radio, ".");
+-	data.ifname_prefix = data.config.ifname_prefix;
+-	if (!data.ifname_prefix)
+-		data.ifname_prefix = data.phy + data.vif_phy_suffix + "-";
+-	let active_ifnames = [];
+-
+-	log('Starting');
+-
+ 	let config = data.config;
+ 
+ 	if (!config.band) {
+@@ -205,6 +196,25 @@ function setup() {
+ 	}
+ 	delete config.hwmode;
+ 
++	/*
++	 * On single-wiphy multi-radio devices the radio index is not stable
++	 * across boots, so map the configured band to the radio that currently
++	 * covers it before deriving the phy suffix and interface names.
++	 */
++	let configured_radio = data.config.radio;
++	data.config.radio = wiphy_radio(wiphy_info(data.phy), data.config.band, configured_radio);
++	if (data.config.radio != configured_radio)
++		log(`Band ${data.config.band}: radio ${configured_radio} -> ${data.config.radio}`);
++
++	data.phy_suffix = phy_suffix(data.config.radio, ":");
++	data.vif_phy_suffix = phy_suffix(data.config.radio, ".");
++	data.ifname_prefix = data.config.ifname_prefix;
++	if (!data.ifname_prefix)
++		data.ifname_prefix = data.phy + data.vif_phy_suffix + "-";
++	let active_ifnames = [];
++
++	log('Starting');
++
+ 	validate('device', config);
+ 	setup_phy(data.phy, data.config, data.data);
+ 
+--- a/files-ucode/usr/share/ucode/wifi/common.uc
++++ b/files-ucode/usr/share/ucode/wifi/common.uc
+@@ -28,6 +28,47 @@ export function wiphy_band(info, band) {
+ 	return info.wiphy_bands[band_idx];
+ };
+ 
++function freq_in_range(freq_ranges, freq) {
++	if (!freq_ranges)
++		return true;
++
++	freq *= 1000;
++	for (let range in freq_ranges)
++		if (freq >= range.start && freq <= range.end)
++			return true;
++}
++
++function radio_supports_band(radio, band) {
++	if (!radio.freq_ranges || !band?.freqs)
++		return false;
++
++	for (let freq in band.freqs)
++		if (freq_in_range(radio.freq_ranges, freq.freq))
++			return true;
++
++	return false;
++}
++
++export function wiphy_radio(info, band, current) {
++	/* null / -1 select the whole phy, keep them as they are */
++	if (current == null || current < 0)
++		return current;
++
++	let band_info = wiphy_band(info, band);
++	if (!info?.radios || !band_info)
++		return current;
++
++	for (let radio in info.radios)
++		if (radio.index == current && radio_supports_band(radio, band_info))
++			return current;
++
++	for (let radio in info.radios)
++		if (radio_supports_band(radio, band_info))
++			return radio.index;
++
++	return current;
++};
++
+ export function log(msg) {
+ 	printf(`wifi-scripts: ${msg}\n`);
+ };
