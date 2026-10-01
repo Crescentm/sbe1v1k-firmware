@@ -16,4 +16,22 @@ if ! uci -q get system.@imm_init[0].sbe1v1k_packet_steering >/dev/null; then
 	uci -q commit system
 fi
 
+# The three radios share one wiphy, so only one of them can scan at a time.
+# The 20/40 MHz coexistence scan on 5/6 GHz retries -EBUSY for 15 s and then
+# brings the AP up at 20 MHz. Skip that scan on 5/6 GHz (it has no effect on
+# channel selection there in practice).
+if ! uci -q get system.@imm_init[0].sbe1v1k_noscan >/dev/null; then
+	for dev in $(uci -q show wireless | sed -n "s/^wireless\.\([^.]*\)=wifi-device$/\1/p"); do
+		case "$(uci -q get wireless.$dev.band)" in
+		5g|6g)
+			uci -q get wireless.$dev.noscan >/dev/null ||
+				uci -q set wireless.$dev.noscan='1'
+			;;
+		esac
+	done
+	uci -q set system.@imm_init[0].sbe1v1k_noscan='1'
+	uci -q commit wireless
+	uci -q commit system
+fi
+
 exit 0
