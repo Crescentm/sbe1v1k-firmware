@@ -36,6 +36,12 @@ git reset -q --hard
 git clean -q -fd -- target package include scripts config tools toolchain
 rm -rf files
 
+# Feeds are separate git checkouts; undo files an earlier overlay copied in.
+for f in feeds/*/; do
+	[ -e "$f.git" ] || continue
+	git -C "$f" checkout -q -- . && git -C "$f" clean -q -fd
+done
+
 # overlay/ holds files added to the tree verbatim (new kernel or package
 # patches); patches/tree/ changes files the tree already has.
 if [ -d "$REPO/overlay" ]; then
