@@ -637,3 +637,14 @@ three-radio AP setup. Then, roughly in order of risk:
 - `PKG_RELEASE` of mac80211 is still not bumped (kmods change with the
   kernel version anyway); hostapd is bumped to 4 (0019).
 - No hardware test yet.
+
+## wifi-scripts 956: load the wireless config written at first boot
+
+Found on the round 2 RAM boot (2026-10-01): on a fresh install no radio
+came up until `wifi up`. `/etc/config/wireless` is written by the
+ieee80211 hotplug handler after netifd has started, and
+`network.wireless retry` only retries devices netifd already knows.
+956 reloads netifd when `wifi config` changed the file. Tested on the
+RAM boot by deleting the config and running the new handler: 0 → 3
+radios up; a second run with no change does not reload. Same code in
+OpenWrt main (`10-wifi-detect`), not reported upstream yet.
