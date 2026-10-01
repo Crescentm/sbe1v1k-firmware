@@ -297,3 +297,421 @@ irqbalance still spreads the ath12k `ce*` IRQs.
 `rxdesc_*`/`txcmpl_*` IRQ numbers from `/proc/interrupts` and stores them as
 `irqbalance.irqbalance.banirq`, writing the config only when the list
 changes. Verified: after 30 s of irqbalance, rxdesc_20..23 stay on CPU0..3.
+
+# Round 2
+
+Added on 2026-10-01, on the same base (ImmortalWrt `bf156b68e3`, kernel
+6.18.54, round 1 applied). New project rule: fix what can be fixed even
+for features this board's owner does not use. Risky changes are "test"
+items: each is its own file and can be deleted without touching the
+others.
+
+| Item | Tier | Files |
+|---|---|---|
+| R1 watchdog bootstatus | fix | `overlay/.../patches-6.18/0416`–`0420` |
+| R2 PCIe Root Port reset on link down | test | `overlay/.../patches-6.18/0421`–`0424` |
+| R3a PPE egress drain on link down | test | `overlay/.../patches-6.18/0425` |
+| R3b PPE multicast DRR slots | test | `overlay/.../patches-6.18/0426` |
+| R3c EEE off at the PHYs | test | `overlay/.../patches-6.18/0427` |
+| R4a phylink link_state init | fix | `overlay/.../patches-6.18/0428` |
+| R4b phylink PCS validation | fix | `overlay/.../patches-6.18/0429` |
+| R4c qca808x active-high LEDs | fix | `overlay/.../patches-6.18/0430`, `0431` |
+| R4d MP5496 supply names | fix | `overlay/.../patches-6.18/0432` |
+| R4e thermal step_wise stale vote | fix | `overlay/.../patches-6.18/0433` |
+| R4f dtc warnings | fix | `tree/0030-sbe1v1k-dts-fix-dtc-warnings.patch` |
+| R5 fan PWM 1 kHz | test | `tree/0032-sbe1v1k-dts-fan-pwm-1khz.patch` |
+| R6 rtpengine kmod on 6.18 | fix | `overlay/feeds/telephony/net/rtpengine/patches/105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch` |
+| R8 lan2/lan3 LEDs | test | `tree/0031-sbe1v1k-dts-lan2-lan3-phy-leds.patch`, `overlay/.../ipq95xx/base-files/etc/board.d/01_leds` |
+
+All the new kernel patches sit in the qualcommbe target directory, even
+the generic ones (phylink, thermal, PCI core). Some of them were adapted
+to code that only exists after the qualcommbe series (qca808x QCA8084
+changes) or after `pending-6.18/737-*` (phylink), and the target
+patches are applied last.
+
+## R1: watchdog bootstatus (0416–0420)
+
+- **Symptom:** after a watchdog reset `bootstatus` is 0. qcom-wdt only
+  looks at `WDT_STS.EXPIRED_STATUS`, which is already clear when Linux
+  boots.
+- **0416–0419:** mainline, unchanged, in the order merged:
+  - `158dd300b07b` "add support to get the bootstatus from IMEM" (v7.2)
+  - `0595f74ea1d3` "report WDIOF_POWERUNDER in bootstatus"
+  - `6a393b0ea3cc` "report bootstatus on IPQ9574 and IPQ5332" (IPQ9574:
+    1 = watchdog → `WDIOF_CARDRESET`, 32 = power-on → `WDIOF_POWERUNDER`)
+  - `2bab791e56d9` "Propagate errors from optional IRQ lookup", a probe
+    fix merged with them.
+
+  After 0416–0419 `qcom-wdt.c` is identical to mainline master.
+- **0420 (ours):** the IPQ9574 IMEM node and `sram = <&restart_reason>`
+  on the watchdog.
+  - The IMEM node is Kathiravan Thirumoorthy's "ipq9574: Add the IMEM
+    node" v3 5/6, unchanged. It is "changes requested" upstream because
+    the reviewers want the IMEM binding posted complete; the node itself
+    was not criticised. Nothing newer than v3 exists for IPQ9574.
+  - The child node and property follow his IPQ5424 patch (v11 3/3, in
+    linux-next).
+  - Offset 0x7a4: QSDK 12.x `ipq9574.dtsi` has
+    `restart-reason-buf-addr@7a4` in the IMEM at 0x08600000, and its
+    `qti_scm_restart_reason.c` decodes 0x1 as NON_SECURE_WATCHDOG and
+    0x20 as POWER_ON_RESET, the values mainline uses for IPQ9574.
+- **Safety:** the driver only `ioremap()`s and reads 4 bytes at probe.
+  `CONFIG_SRAM` is not enabled, so nothing else binds the node. If the
+  word holds anything else, bootstatus stays 0. Without 0420 the driver
+  falls back to the old check. The watchdog itself is unchanged.
+- **Upstream:** 0416–0419 merged; the IPQ9574 DTS part is not posted.
+
+## R2: PCIe Root Port reset after link down (0421–0424, test)
+
+- **Symptom:** when a QCN9274 link drops (firmware crash, link
+  instability), the link stays down until reboot.
+- **Patches**, all from mainline (Manivannan Sadhasivam,
+  "pci-port-reset-v9", merged for v7.3):
+  - 0421 `3fc686d550f6` "PCI/ERR: Add support for resetting the Root
+    Ports in a platform-specific way", clean;
+  - 0422 `4c99bace4f4e` "PCI: host-common: Add link down handling for
+    Root Ports", context-only adaptation (6.18 lacks
+    `pci_reset_bridge()` and `pci_host_common_d3cold_possible()`);
+  - 0423 `4d88cb82a6d9` "PCI: qcom: Implement .reset_root_port() and
+    use for link down", context-only adaptation (6.18 lacks
+    `PARF_LTSSM_STATE_MASK`, `qcom_pcie->reset`, OPP helpers and
+    per-port PERST# lists), no functional change;
+  - 0424 `0b967a82e7b3` "arm64: dts: qcom: ipq9574: Add missing PCIe
+    global IRQs" (Kathiravan Thirumoorthy). Without it the feature
+    never triggers: 6.18's `ipq9574.dtsi` has no "global" interrupt.
+
+  About 190 changed lines. Every symbol used exists in 6.18
+  (`dw_pcie_setup_rc`, `dw_pcie_wait_for_link`, `pcie_do_recovery`,
+  `for_each_pci_bridge`…). `CONFIG_PCIEAER`, `PCIEPORTBUS` and
+  `PCIE_QCOM` are on, so the AER recovery path is used.
+- **Trigger:** the link-down bit of `PARF_INT_ALL_STATUS` on the
+  "global" IRQ. The thread calls `pci_host_handle_link_down()` →
+  `pcie_do_recovery()` → `bridge->reset_root_port()`, which waits for
+  the flush, deinits and re-inits the host, retrains and waits for the
+  link.
+- **Not taken:** `b99a594cfdd0` "ipq9574: Add PCIe bridge node". The
+  feature does not need it, and it would clash with our board's own
+  `pcie@0` nodes and needs the mixed PERST#/PHY handling 6.18 lacks.
+- **Limits:**
+  - ath12k has no `pci_error_handlers`, so the link comes back but the
+    radio is not re-initialised by the kernel. Recovery reports
+    "device recovery failed" and the radio needs a driver rebind or a
+    reboot. Mainline behaves the same.
+  - The probe now writes `PARF_INT_ALL_MASK = LINK_DOWN | MSI_DEV_0_7`.
+    The MSI bits are the hardware default, but if the global IRQ also
+    fires for every MSI on IPQ9574, it would cost CPU under Wi-Fi load.
+    See the checklist.
+  - The PARF flush bits are generic Qualcomm definitions. Upstream was
+    not tested on IPQ. If they differ here, the reset logs "Flush
+    completion failed" and does nothing.
+- **Upstream:** merged in mainline (v7.3).
+
+## R3: PPE egress and EEE (0425–0427, test)
+
+Source: [openwrt/openwrt#24188](https://github.com/openwrt/openwrt/pull/24188)
+"qualcommax: qca_ppe: fix per-port egress wedges" (Julius Bairaktaris,
+merged about 2026-09-22) and #24252 (folded into it). They target the
+IPQ807x `qca_ppe` driver. The qca-ssdk idea comes from commit
+`30c10e7f` "enable and disable loopback for xgmac to fix qm stuck issue".
+
+**Register mapping (IPQ807x qca_ppe → IPQ9574 qcom-ppe):**
+
+| Register / field | IPQ807x | IPQ9574 (`ppe_regs.h`) | qca-ssdk (APPE) |
+|---|---|---|---|
+| `PORT_BRIDGE_CTRL.TXMAC_EN` | 0x060300 + 4·p, bit 16 | 0x60300, +4, BIT(16) | `hppe_fdb_reg.h`; L2 base 0x060000 for APPE in `hsl_dev.c` |
+| XGMAC `RX_CONFIG.LM` | port MAC CSR + 0x4, bit 10 | 0x500000 + (p−1)·0x4000 + 0x4; LM added as BIT(10) | `hppe_xgportctrl_reg.h` LM offset 10; xgmac_id = port − 1 on APPE |
+| XGMAC RE / TE | bit 0 / bit 0 | `XGMAC_RXEN` / `XGMAC_TXEN` | same |
+| L0 flow map / C/E flow cfg | 0x402000 / 0x404000 / 0x406000 | same addresses and fields | — |
+
+qca-ssdk runs the same link-down sequence for APPE (IPQ95xx) in
+`qca_hppe_mac_sw_sync_task()`: gate off, `mdelay(10)`, RX MAC off,
+1 ms XGMAC loopback pulse. qcom-ppe already does #24188's commit 1 (gate
+TXMAC_EN off first on link down, set it last on link up).
+
+- **0425 drain on link down (ours):** after closing the gate, wait
+  10 ms. On XGMAC ports (2.5G/10G: lan1, wan) set LM for 1 ms after RX
+  is off and before TX goes off; a loopback already set is left alone.
+  It sleeps in `mac_link_down()`, which phylink calls from process
+  context. Cost: 10–12 ms per link down.
+- **0426 multicast DRR slots (ours):** move each port's multicast
+  queues to its idle unicast slots 12–15 so they no longer share an L0
+  DRR node with unicast queue 0. On IPQ807x that pairing latched to
+  about one dequeue per second. **Speculative on IPQ9574:** its L1
+  level already puts both of a port's L0 flows on one DRR node, and the
+  latch was never seen here. It also changes QoS: multicast gets an
+  equal DRR share against unicast instead of strict priority. A/B test
+  only.
+- **0427 EEE off (ours, based on #24188 commit 2):** the PPE MACs do not
+  do LPI, but without `mac_*_tx_lpi` ops phylink leaves the PHYs
+  advertising EEE. qca-ssdk disables EEE on every port at init. Empty
+  ops make phylink call `phy_disable_eee()`, and `ethtool --set-eee`
+  returns EOPNOTSUPP. This also covers the forum's EEE latency jitter on
+  the 10G WAN.
+- **Evidence of the hazard on IPQ9574:** none direct. No qualcommbe
+  issue reports "carrier up, no TX". The trigger is a deep egress queue
+  at link loss, which becomes likely with PPE offload (PR #24178,
+  open).
+- **Conflict note:** #24178 adds `ppe_port_bridge_txmac_set()` in
+  `ppe_port.c` and would conflict textually with 0425.
+
+## R4: generic upstream fixes
+
+- **0428 phylink "initialise link_state before a forced major config"**
+  (`113998aa372f`, net, 2026-09-04): not in 6.18.54 or the stable
+  queue. On this board `force_major_config` is never set (qcom-ppe does
+  not use the fwnode PCS provider), so this is hardening. Zero risk.
+- **0429 phylink "correctly validate returned PCS in
+  phylink_inband_caps"** (`f2849b1fd059`): vanilla 6.18.54 has it, but
+  `pending-6.18/737-02` rewrites the function back to a plain NULL
+  check. Adapted to the 737-02 code; noted in the header.
+- **0430/0431 qca808x active-high LED polarity** (Donggeun Yoo, net-next
+  `5117ce8c35d1`, `f1b4766d67bb`, queued for v7.4, marked "never worked",
+  no stable). Today an `active-high` LED node makes `led_polarity_set`
+  fail with -EINVAL, the PHY probe fails and phylib falls back to genphy.
+  0431 keeps the bit across soft resets; its context was adapted to the
+  QCA8084 code. **Our lan1 nodes (`active-low`) behave exactly as
+  before.**
+- **0432 regulator qcom_smd "change MP5496 supply names"** (Gabor Juhos,
+  v1 2025-12-16, the only version, patchwork "handled-elsewhere", not
+  merged):
+  - Cause of "Supply for s1 (s1) resolved to itself": the MP5496 table
+    uses the output's own name as its supply name. Our s1/s2 have no
+    `*-supply` and no `regulator-name`, so the name lookup finds the
+    regulator itself. The core then uses the dummy supply, so the
+    message is cosmetic.
+  - With the patch the supply names become `vdd_s1`, `vdd_s2_l2_l3` and
+    `vdd_l4_l5`; the lookup finds nothing and silently uses the dummy.
+  - Interaction with our DTS (no l5, no supply properties): none. No
+    in-tree DTS uses `s1-supply` and the like, so the ABI change hits
+    nobody.
+- **0433 thermal step_wise "fix stale mitigation vote with non-zero
+  lower bounds"** (`ec0d89150a93`, 2026-09-22, in the 6.18 stable
+  queue). Our fan maps use lower = upper = 1/2/3 on one zone, so a quick
+  temperature drop across two trips could leave the fan one step too
+  high. **Drop it when the kernel moves to 6.18.55**, which should carry
+  it.
+- **tree/0030 dtc warnings:** see the next section.
+- **Checked and not taken:**
+  - 2026 dts: `bd2dc325db8c` (USB wrapper IRQs, only for dtbs_check and
+    suspend), `53f5d2d61a1c` (eMMC details; our board DTS already has
+    them and it conflicts), `65991dedc8c1` (moves the MP5496 references
+    out of the dtsi, no functional change, renames our `ipq9574_s1`
+    label).
+  - `fedcff16a9b6` qmp-usb runtime PM at boot, `346ba8464635` qmp-usb
+    regulator load, `0aae2c731758` cqhci endianness, `52957cdad30f`
+    sdhci-msm wrapped keys, the tsens wake IRQ, `0fe1e3e8f338` phylink
+    link_gpio: none applies to this hardware or 6.18 feature set.
+  - `f2090ebdb59d` smem `qcom_smem_is_available`: it would break 6.18,
+    which lacks its prerequisite `7a94d5f31b54`.
+  - Unmerged suspend-only qusb2 and dwc3-qcom fixes, sdhci-msm vqmmc,
+    tsens limits, new Realtek PHY IDs: not applicable yet.
+  - Already in our tree (no action): qusb2 `1ca52c0983c3`, qmp-usb
+    `142c55933792`, tsens `e28ef2f3ccea`, realtek `202fef9bbbf5`,
+    `510a283f4d12`, `8744b63e8a9a`, phylink `e5db987f5d7f`,
+    `5ba017f9efef`, `a940003f44e7`, pwm-fan `26d5ff797685`, qca807x
+    `2bb995e6155c`, OpenWrt PRs 24191, 24218, 25405, 24033, 25344.
+  - pcs-qcom-ipq9574 and qcom-ppe have had no mainline fixes since 6.18.
+  - Worth a hardware check by analogy: OpenWrt PR #24566 (qualcommax,
+    QCA8081 2.5G egress corruption from a stale port 5 TX clock mux).
+    Look at the nss_cc port5 TX clock parent in
+    `/sys/kernel/debug/clk/clk_summary` and run an iperf TX test on lan1.
+
+## R4f: tree/0030 dtc warnings
+
+Before (ImmortalWrt DTS plus round 1):
+
+```
+Warning (reg_format): /soc@0/mmc@7804000/card@0:reg: property has invalid length (4 bytes) (#address-cells == 2, #size-cells == 1)
+Warning (pci_device_reg): Failed prerequisite 'reg_format'   (and 3 more)
+Warning (avoid_default_addr_size): .../card@0: Relying on default #address-cells / #size-cells value
+```
+
+The failed `reg_format` check also switched off the PCI checks. With
+only the MMC part fixed, they show two more:
+
+```
+Warning (pci_device_reg): /soc@0/pcie@18000000/pcie@0,0:reg: PCI reg config space address cells 2 and 3 must be 0
+Warning (pci_device_reg): /soc@0/pcie@20000000/pcie@0:reg: PCI reg config space address cells 2 and 3 must be 0
+```
+
+0030 adds `#address-cells = <1>; #size-cells = <0>;` to `&sdhc_1`, sets
+the pcie2/pcie3 root port `reg` to all zeros (like pcie1) and renames
+`pcie@0,0` to `pcie@0`. Linux takes the devfn from the first reg cell,
+which was already 0, so the nodes match the same devices. After it the
+DTB builds with **no dtc warnings**. These are the same changes as
+OneNAS b6fc7b1f43. Not taken from that commit: its `cma=256M` /
+reserved CMA pool, which is a policy choice rather than a fix.
+
+## R5: tree/0032 fan PWM 1 kHz (test)
+
+- **Board:** `pwms = <&pwm 3 40000 0>` (25 kHz) since the board was
+  added in January. Cooling levels are 36/72/128/255 at trips
+  40/50/65/80 °C.
+- **Forum (thread 245244):**
+  - posts 45, 51 and 53 (motolav, Feb 2026): the Delta ASB0512HA is
+    quiet and usable over its whole range at 1 kHz, weak at 5–10 kHz,
+    noisy at 2.5 kHz;
+  - Delta specifies 1 kHz for similar fans (THA series);
+  - post 67 (Mar 2026): "PWM is still semi-broken".
+- **Driver:** those tests predate qualcommbe 0403 (Kenneth Kasilag, June
+  2026). Before it, pwm-ipq fixed `pwm_div` at its maximum, so periods
+  below about 655 µs were stretched and duty cycles were scaled wrongly.
+  That explains part of the bad results above 1 kHz. Simulating 0403's
+  divider search at the 100 MHz ADSS PWM clock:
+  - 25 kHz: pre_div 0, pwm_div 3999;
+  - 1 kHz: pre_div 1, pwm_div 49999.
+
+  Both are exact. 1 kHz has finer duty steps.
+- **Change:** period 1000000 ns. Cooling levels and trips are unchanged.
+- **Status:** test item. The justification is the fan maker's frequency
+  and the forum's listening test, but that test ran on the old driver.
+  Compare by ear and by temperature against 25 kHz (drop the patch) at
+  each cooling level. Upstream: none.
+
+## R6: rtpengine (feed telephony)
+
+- **Failure** (`make package/feeds/telephony/rtpengine/compile V=s`,
+  variant no-transcode, built because `CONFIG_ALL_KMODS` selects
+  `kmod-ipt-rtpengine`):
+
+  ```
+  xt_RTPENGINE.c:39:10: fatal error: linux/netfilter/xt_RTPENGINE.h: No such file or directory
+  ```
+
+- **Cause:** `kernel-module/Makefile` of mr11.5.1.49 passes
+  `-D__RE_EXTERNAL` and the version through `EXTRA_CFLAGS`, which kbuild
+  stopped honouring in 6.15 (`e966ad0edd00`). Without the define the
+  module includes the in-kernel header path instead of its own
+  `xt_RTPENGINE.h`.
+- **Fix:** `105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch`
+  is upstream rtpengine `38700abf0b79` (Richard Fuchs, 2025-05-28),
+  extended to the `__RE_EXTERNAL` line that mr11.5 still has.
+  `ccflags-y` works on old kernels as well.
+- **Result:** `kmod-ipt-rtpengine-6.18.54.11.5.1.49-r1.apk` builds,
+  vermagic 6.18.54.
+- **Feed tree:** the overlay copies the file into
+  `feeds/telephony/net/rtpengine/patches/`. `src-build.sh` does not
+  git-clean `feeds/`, so the file stays there and is not removed when
+  this repo drops it. It would also collide if the telephony feed ever
+  adds its own 105. The telephony feed (HEAD `5d68d53`) has no fix yet;
+  upstream telephony should get the same patch.
+- **Upstream:** fixed in rtpengine master by `38700abf0b79` (May 2025),
+  not on the mr11.5 branch; the OpenWrt telephony feed still ships
+  mr11.5.1.49.
+
+## R8: lan2/lan3 LEDs (tree/0031, test)
+
+- **Wiring evidence:**
+  - Each port has two LEDs. Today Linux leaves the QCA8075 LED pins at
+    the chip defaults: at 1G both blink together.
+  - The stock QSDK 12.5 DTB has `led_source@3/@6/@9`: mode normal, speed
+    all, blink enabled, active high.
+  - qca-ssdk `fal_led.c` maps a source to port = source / 3 + 1 and
+    pin = source % 3. That gives pin 0 of SSDK ports 2–4, i.e. PHYs
+    0x11–0x13. lan2 is 0x12 and lan3 is 0x13; 0x11 is not used on this
+    board.
+  - `malibu_phy.c`: pin 0 is LED_100N (MMD7 0x8074), pin 1 is LED_1000N
+    (0x8076). These are the registers qca807x uses for LED index 0 and 1.
+- **Nodes:** `led@0` yellow and `led@1` green, function LAN,
+  `default-state = "keep"`. LED class names are
+  `90000.mdio-1:12:{yellow,green}:lan` and `…:13:…`.
+- **Deliberately not like lan1:**
+  - **No `led@2`.** qca807x accepts index 0 and 1 only; anything else
+    fails with -EINVAL.
+  - **No `active-low`/`active-high`.** qca807x has no
+    `led_polarity_set`, so either property makes `of_phy_led()` fail,
+    which **fails the PHY probe and takes PPE ports 3/4 down with it**.
+    The pins keep the chip's polarity, which already lights them on
+    link. The stock "active high" therefore cannot be expressed with
+    this driver; adding `led_polarity_set` to qca807x would need the
+    QCA8075 polarity register, which no source we have documents.
+- **01_leds:**
+  - green: `link_1000 tx rx`;
+  - yellow: `link_100 link_10 tx rx`.
+
+  qca807x offloads link_10/100/1000, tx and rx. board.d only runs when
+  `board.json` is created, so an upgrade that keeps the configuration
+  needs `rm /etc/board.json; /bin/board_detect` or the LED settings
+  added by hand.
+- **If the colours are swapped on the hardware:** exchange
+  `LED_COLOR_ID_YELLOW` and `LED_COLOR_ID_GREEN` in both nodes of 0031.
+  01_leds then needs no change.
+
+## Round 2 validation
+
+Run on 2026-10-01 in `~/owrt/wt-plat` (ImmortalWrt `bf156b68e3`), with
+everything in this repo applied, including the WiFi agent's files:
+
+- **`STAGE=prepare`:** OK. The new overlay files (kernel patches, the
+  rtpengine patch, 01_leds) are copied, and tree 0030–0032 apply after
+  0001–0011.
+- **`make target/linux/{clean,prepare} V=s`:** every generic and
+  qualcommbe patch applies, none with fuzz or offset. 0424 was refreshed onto 0420.
+- **`make target/linux/compile -j16 V=s`:** OK, with no compiler
+  warnings from the kernel. `System.map` has
+  `pci_host_handle_link_down`, `qcom_pcie_reset_root_port` and
+  `qca808x_led_polarity_set`. `.config` has `QCOM_WDT`, `PCIE_QCOM`,
+  `PCIEAER`, `PCI_HOST_COMMON`, `QCA807X_PHY`, `QCA808X_PHY`,
+  `THERMAL_GOV_STEP_WISE` and `REGULATOR_QCOM_SMD_RPM` built in.
+- **`make package/kernel/linux/compile -j16`:** OK
+  (`kmod-qcom-ppe-6.18.54-r1.apk`).
+- **`make package/feeds/telephony/rtpengine/{clean,compile} V=s`:** OK.
+  Before 105 it failed as described in R6.
+- **DTB** (same cpp + dtc command and flags as `Image/BuildDTB`):
+  - no dtc warnings (before: the `card@0` reg warnings);
+  - `sram@8600000` / `restartreason-sram@7a4` present, and the watchdog
+    has `sram = <&restart_reason>`;
+  - pcie0–3 list `"global"` as their 9th interrupt;
+  - the root ports are `pcie@0` with all-zero reg;
+  - `&sdhc_1` has `#address-cells = <1>; #size-cells = <0>`;
+  - `ethernet-phy@18` and `@19` have `led@0` (colour 6, yellow) and
+    `led@1` (colour 2, green), no polarity property;
+  - `pwms = <&pwm 3 1000000 0>`.
+- **`checkpatch.pl --strict`:** 0425–0427 clean. 0420's only remaining
+  warning is "unknown commit id", because checkpatch ran without git.
+- **Not compiled:** the userspace rtpengine daemon (no image or feed
+  selects it), and an image (not needed for these checks).
+
+## Round 2 hardware checklist
+
+RAM boot (initramfs) first.
+
+1. **Boot and Ethernet:**
+   - all four ports come up; lan2/lan3 PHYs probe (no -EINVAL in
+     `dmesg | grep -i qca807`);
+   - `ethtool --show-eee wan`/`lan1`/`lan2` shows EEE not advertised
+     (0427).
+2. **Watchdog (0416–0420):**
+   - `cat /sys/class/watchdog/watchdog0/bootstatus` after a normal boot
+     (expect 0, or 1 = POWERUNDER after a cold power-on);
+   - `echo c > /proc/sysrq-trigger` or stop the feeder
+     (`ubus call system watchdog '{"magicclose":true,"stop":true}'`) and
+     wait for the reset; afterwards bootstatus should be 32
+     (`WDIOF_CARDRESET`). If it stays 0, read the raw word:
+     `devmem 0x086007a4` (busybox devmem, if built).
+3. **PCIe (0421–0424):**
+   - `grep global /proc/interrupts`: three `qcom_pcie_global_irq*`
+     lines. Under heavy Wi-Fi traffic their counts must stay near 0. If
+     they climb with traffic, the MSI bits fire the global IRQ: report
+     it, and drop 0421–0424.
+   - all three radios still come up.
+4. **Link flaps (0425–0427):**
+   - plug/unplug each port 20 times, including under iperf load;
+   - after each replug, traffic must flow;
+   - no "phylink" or "ppe" errors in dmesg.
+5. **Multicast (0426):** mDNS/IPTV/multicast iperf through lan ports
+   while unicast is saturated. Compare with 0426 removed.
+6. **LEDs (0030/0031 + 01_leds):**
+   - `ls /sys/class/leds` shows `90000.mdio-1:12:{green,yellow}:lan`
+     and `:13:`;
+   - at 1G green lights and blinks; at 100M yellow does. If the colours
+     are the other way round, swap them in 0031;
+   - on an upgraded config: `rm /etc/board.json; board_detect` and
+     check `uci show system | grep lan2`.
+7. **Fan (0032):** at idle and under load, listen and read
+   `/sys/class/hwmon/*/pwm1` and the zone temperatures; compare with a
+   25 kHz build.
+8. **Regulators (0432):** `dmesg | grep -i "resolved to itself"` is
+   empty, cpufreq still scales up to 2.2 GHz.
+9. **rtpengine (feed):** `apk add kmod-ipt-rtpengine` and
+    `modprobe xt_RTPENGINE` load without errors.
