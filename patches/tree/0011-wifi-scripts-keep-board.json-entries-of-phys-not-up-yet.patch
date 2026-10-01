@@ -1,0 +1,127 @@
+From bd091da88722a0ed45bcd120b161fdd00f857dd5 Mon Sep 17 00:00:00 2001
+From: Patrick Lawler <patricktlawler@gmail.com>
+Date: Tue, 29 Sep 2026 01:52:12 -0400
+Subject: [PATCH] wifi-scripts: keep board.json entries of phys not up yet
+
+wifi-detect.uc drops every phy from the board data, then adds back the
+ones in the nl80211 dump. At boot the dump often does not have all of
+them yet:
+
+- /etc/init.d/boot runs "wifi config" before kmodloader, so on most
+  devices cfg80211 is not loaded yet and the dump fails.
+- when the first phy's ieee80211 hotplug event runs "wifi config",
+  other phys can still be coming up, e.g. from another driver or a
+  second radio of the same one.
+
+Each time, board.json is rewritten without the missing phys, and the
+next hotplug event adds them back. On a TP-Link Archer BE550 (ath11k
+and ath12k) that is three writes on every boot, although board.json
+ends up unchanged.
+
+Exit without touching board.json if the dump fails, and keep the entry
+of a phy that is not in the dump while its device has a driver. The
+kernel creates the device's driver link before calling probe, so this
+also covers a driver that is still probing. An entry whose device is
+gone, e.g. of an unplugged USB adapter, or has no driver is still
+removed. With this, the BE550 no longer writes board.json during boot.
+
+Link: https://lists.openwrt.org/pipermail/openwrt-devel/2026-September/045053.html
+Link: https://lists.openwrt.org/pipermail/openwrt-devel/2026-September/045098.html
+Signed-off-by: Patrick Lawler <patricktlawler@gmail.com>
+
+[SBE1V1K: OpenWrt PR https://github.com/openwrt/openwrt/pull/25473
+ head bd091da88722a0ed45bcd120b161fdd00f857dd5 (latest as of 2026-09-30).
+ Rebased on 0010 (PR #25471): PKG_RELEASE 3 -> 4 instead of 2 -> 3,
+ index lines dropped. wifi-detect.uc hunks unchanged.]
+---
+ package/network/config/wifi-scripts/Makefile  |  2 +-
+ .../files/usr/share/hostap/wifi-detect.uc     | 39 ++++++++++++++-----
+ 2 files changed, 30 insertions(+), 11 deletions(-)
+
+diff --git a/package/network/config/wifi-scripts/Makefile b/package/network/config/wifi-scripts/Makefile
+--- a/package/network/config/wifi-scripts/Makefile
++++ b/package/network/config/wifi-scripts/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=wifi-scripts
+ PKG_VERSION:=1.0
+-PKG_RELEASE:=3
++PKG_RELEASE:=4
+ PKG_LICENSE:=GPL-2.0
+ 
+ PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+diff --git a/package/network/config/wifi-scripts/files/usr/share/hostap/wifi-detect.uc b/package/network/config/wifi-scripts/files/usr/share/hostap/wifi-detect.uc
+--- a/package/network/config/wifi-scripts/files/usr/share/hostap/wifi-detect.uc
++++ b/package/network/config/wifi-scripts/files/usr/share/hostap/wifi-detect.uc
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env ucode
+ 'use strict';
+-import { readfile, writefile, realpath, glob, basename, unlink, open, rename } from "fs";
++import { readfile, writefile, realpath, glob, basename, unlink, open, rename, stat } from "fs";
+ import { is_equal } from "/usr/share/hostap/common.uc";
+ let nl = require("nl80211");
+ 
+@@ -28,14 +28,30 @@ function phy_path(name) {
+ 	return devpath;
+ }
+ 
+-function cleanup() {
++function dev_has_driver(path) {
++	let dev = replace(path, /\+[0-9]+$/, "");
++
++	return !!(stat(`/sys/devices/${dev}/driver`) || stat(`/sys/devices/platform/${dev}/driver`));
++}
++
++function cleanup(phys) {
+ 	let wlan = board_data.wlan;
++	let paths = map(filter(phys, (phy) => phy), (phy) => phy_path(phy.wiphy_name));
++
++	for (let name in wlan) {
++		let entry_paths = type(wlan[name].path) == "array" ? wlan[name].path : [ wlan[name].path ];
++
++		// A phy whose device has a driver (bound or still probing) but
++		// is not in the dump yet is still being set up: keep its entry.
++		if (!length(filter(entry_paths, (path) => index(paths, path) >= 0)) &&
++		    length(filter(entry_paths, (path) => path && dev_has_driver(path))))
++			continue;
+ 
+-	for (let name in wlan)
+ 		if (substr(name, 0, 3) == "phy")
+ 			delete wlan[name];
+ 		else
+ 			delete wlan[name].info;
++	}
+ }
+ 
+ function wiphy_path_match(entry_path, path) {
+@@ -89,11 +105,7 @@ function freq_range_match(ranges, freq) {
+ 	return false;
+ }
+ 
+-function wiphy_detect() {
+-	let phys = nl.request(nl.const.NL80211_CMD_GET_WIPHY, nl.const.NLM_F_DUMP, { split_wiphy_dump: true });
+-	if (!phys)
+-		return;
+-
++function wiphy_detect(phys) {
+ 	for (let phy in phys) {
+ 		if (!phy)
+ 			continue;
+@@ -253,8 +265,15 @@ function wiphy_detect() {
+ 	}
+ }
+ 
+-cleanup();
+-wiphy_detect();
++let phys = nl.request(nl.const.NL80211_CMD_GET_WIPHY, nl.const.NLM_F_DUMP, { split_wiphy_dump: true });
++// the dump fails while cfg80211 is not loaded yet, e.g. when
++// /etc/init.d/boot runs "wifi config" before kmodloader. Keep
++// board.json as it is instead of writing it without any phy.
++if (!phys)
++	exit(0);
++
++cleanup(phys);
++wiphy_detect(phys);
+ if (!is_equal(prev_board_data, board_data)) {
+ 	let new_file = board_file + ".new";
+ 	unlink(new_file);
