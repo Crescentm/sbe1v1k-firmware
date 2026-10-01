@@ -1,0 +1,64 @@
+From: "Chia-Lin Kao (AceLan)" <acelan.kao@canonical.com>
+Date: Wed, 2 Sep 2026 09:01:17 +0800
+Subject: [PATCH] wifi: ath12k: fix NULL dereference in hw scan cleanup path
+
+ath12k_mac_op_hw_scan() walks ahvif->links_map in its abort path to
+tear down the scan vdevs it may have created. It skips link vifs which
+are no longer present:
+
+	arvif = wiphy_dereference(hw->wiphy, ahvif->link[link_id]);
+	if (!arvif)
+		continue;
+
+	ar = arvif->ar;
+	if (ar->scan.arvif == arvif) {
+
+but it does not check arvif->ar, which is cleared in several teardown
+paths while the link remains set in links_map. When firmware crashes
+and the reset worker detaches the link vifs from their radio, a scan
+request arriving in that window fails, enters the abort path and
+dereferences a NULL ar:
+
+  BUG: kernel NULL pointer dereference, address: 0000000000001508
+  RIP: 0010:ath12k_mac_op_hw_scan+0x170/0x8a0 [ath12k]
+  Call Trace:
+   drv_hw_scan+0xa0/0x160 [mac80211]
+   __ieee80211_start_scan+0x305/0x7b0 [mac80211]
+   ieee80211_request_scan+0xe/0x20 [mac80211]
+   nl80211_trigger_scan+0x610/0xa20 [cfg80211]
+
+0x1508 is the offset of scan.arvif within struct ath12k, reached from
+a NULL base.
+
+The oops happens in a task holding wiphy and rtnl locks, so it takes
+down the rest of the networking stack with it: subsequent scan, netns
+and NetworkManager operations block indefinitely in D state.
+
+Check the radio before using it, matching the existing arvif check
+directly above and the arvif->ar check already used elsewhere in this
+file.
+
+Fixes: feed05f1526e8 ("wifi: ath12k: Split scan request for split band device")
+Signed-off-by: Chia-Lin Kao (AceLan) <acelan.kao@canonical.com>
+
+Link: https://patchwork.kernel.org/project/linux-wireless/patch/20260902010117.3225320-1-acelan.kao@canonical.com/
+---
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -5833,6 +5833,16 @@ abort:
+ 				continue;
+ 
+ 			ar = arvif->ar;
++
++			/* The link vif may have been detached from its radio
++			 * while this scan request was being processed, for
++			 * example by a firmware recovery running concurrently.
++			 * The link is still set in links_map in that case, so
++			 * the radio has to be checked before it is used.
++			 */
++			if (!ar)
++				continue;
++
+ 			if (ar->scan.arvif == arvif) {
+ 				wiphy_work_cancel(hw->wiphy, &ar->scan.vdev_clean_wk);
+ 				spin_lock_bh(&ar->data_lock);

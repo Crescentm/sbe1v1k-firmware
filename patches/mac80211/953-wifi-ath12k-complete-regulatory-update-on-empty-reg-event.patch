@@ -24,7 +24,7 @@ complete the pending update.
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -6055,8 +6055,12 @@ static int ath12k_pull_reg_chan_list_ext_update_ev(struct ath12k_base *ab,
+@@ -6063,8 +6063,12 @@ static int ath12k_pull_reg_chan_list_ext_update_ev(struct ath12k_base *ab,
  	}
  
  	if (!total_reg_rules) {
@@ -39,7 +39,7 @@ complete the pending update.
  	}
  
  	memcpy(reg_info->alpha2, &ev->alpha2, REG_ALPHA2_LEN);
-@@ -6977,6 +6981,15 @@ static int ath12k_reg_chan_list_event(struct ath12k_base *ab, struct sk_buff *sk
+@@ -6985,6 +6989,15 @@ static int ath12k_reg_chan_list_event(struct ath12k_base *ab, struct sk_buff *sk
  	}
  
  	ret = ath12k_pull_reg_chan_list_ext_update_ev(ab, skb, reg_info);

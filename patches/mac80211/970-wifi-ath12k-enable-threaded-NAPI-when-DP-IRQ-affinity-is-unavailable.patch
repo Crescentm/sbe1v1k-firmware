@@ -37,7 +37,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  #include <linux/msi.h>
  #include <linux/pci.h>
  #include <linux/time.h>
-@@ -538,12 +539,24 @@ static irqreturn_t ath12k_pci_ext_interrupt_handler(int irq, void *arg)
+@@ -543,12 +544,24 @@ static irqreturn_t ath12k_pci_ext_interrupt_handler(int irq, void *arg)
  	return IRQ_HANDLED;
  }
  
@@ -62,7 +62,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  
  	base_idx = ATH12K_PCI_IRQ_CE0_OFFSET + CE_COUNT_MAX;
  	ret = ath12k_pci_get_user_msi_assignment(ab, "DP",
-@@ -553,6 +566,10 @@ static int ath12k_pci_ext_irq_config(struct ath12k_base *ab)
+@@ -558,6 +571,10 @@ static int ath12k_pci_ext_irq_config(struct ath12k_base *ab)
  	if (ret < 0)
  		return ret;
  
@@ -73,7 +73,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	for (i = 0; i < ATH12K_EXT_IRQ_GRP_NUM_MAX; i++) {
  		irq_grp = &ab->ext_irq_grp[i];
  		u32 num_irq = 0;
-@@ -567,6 +584,8 @@ static int ath12k_pci_ext_irq_config(struct ath12k_base *ab)
+@@ -572,6 +589,8 @@ static int ath12k_pci_ext_irq_config(struct ath12k_base *ab)
  
  		netif_napi_add(irq_grp->napi_ndev, &irq_grp->napi,
  			       ath12k_pci_ext_grp_napi_poll);
@@ -82,7 +82,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  
  		if (ab->hw_params->ring_mask->tx[i] ||
  		    ab->hw_params->ring_mask->rx[i] ||
-@@ -585,7 +604,8 @@ static int ath12k_pci_ext_irq_config(struct ath12k_base *ab)
+@@ -590,7 +609,8 @@ static int ath12k_pci_ext_irq_config(struct ath12k_base *ab)
  		for (j = 0; j < irq_grp->num_irq; j++) {
  			int irq_idx = irq_grp->irqs[j];
  			int vector = (i % num_vectors) + base_vector;

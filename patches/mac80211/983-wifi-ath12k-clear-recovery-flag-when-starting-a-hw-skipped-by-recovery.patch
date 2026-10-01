@@ -1,0 +1,44 @@
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 15:09:21 +0800
+Subject: [PATCH] wifi: ath12k: clear recovery flag when starting a hw skipped by recovery
+
+"wifi: ath12k: fix MLO station firmware crash recovery" moves the
+clear_bit(ATH12K_FLAG_RECOVERY) from ath12k_core_reconfigure_on_crash()
+to ath12k_mac_op_reconfig_complete(). That callback only runs for a hw
+that mac80211 reconfigures after ieee80211_restart_hw(). If no interface
+was up when the firmware crashed, ath12k_core_post_reconfigure_recovery()
+skips the hw (state OFF) and ieee80211_reconfig() returns early because
+open_count is 0, so reconfig_complete() never runs and the flag stays set
+until the driver is reloaded.
+
+With the flag stuck, every later scan fails with -EBUSY ("prevent scan
+during firmware recovery"), keys for missing peers are silently ignored
+and MLO link changes are rejected once an interface is brought up.
+
+When a hw goes from OFF to ON in ath12k_mac_op_start(), clear the flag
+on each radio's device whose firmware is up again (CRASH_FLUSH cleared).
+Such a hw took no part in the recovery, so there is no reconfiguration
+left for the flag to protect.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -9937,6 +9937,17 @@ int ath12k_mac_op_start(struct ieee80211_hw *hw)
+ 	switch (ah->state) {
+ 	case ATH12K_HW_STATE_OFF:
+ 		ah->state = ATH12K_HW_STATE_ON;
++
++		/* A hw that was not started when the firmware crashed is
++		 * skipped by the recovery: mac80211 does not reconfigure it and
++		 * ath12k_mac_op_reconfig_complete() is never called for it, so
++		 * ATH12K_FLAG_RECOVERY would stay set. Clear it once the
++		 * firmware is back up.
++		 */
++		for_each_ar(ah, ar, i) {
++			if (!test_bit(ATH12K_FLAG_CRASH_FLUSH, &ar->ab->dev_flags))
++				clear_bit(ATH12K_FLAG_RECOVERY, &ar->ab->dev_flags);
++		}
+ 		break;
+ 	case ATH12K_HW_STATE_RESTARTING:
+ 		ah->state = ATH12K_HW_STATE_RESTARTED;

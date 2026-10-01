@@ -42,13 +42,13 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
 
 (cherry picked from commit 534459ac562b207ba1a9bb2c95dba77b5939e2da)
 
-[SBE1V1K: test tier. Backported: the default profile context has
- rxdma_monitor_dst_ring_size = 8092 in backports 7.2 (8192 upstream).]
+[SBE1V1K: test tier. Context refreshed on top of 949 (monitor destination
+ ring size 8092 -> 8192), so the hunks now match upstream.]
 ---
 --- a/drivers/net/wireless/ath/ath12k/core.c
 +++ b/drivers/net/wireless/ath/ath12k/core.c
 @@ -52,6 +52,7 @@ ath12k_mem_profile_based_param ath12k_mem_profile_based_param[] = {
- 			.rxdma_monitor_dst_ring_size = 8092,
+ 			.rxdma_monitor_dst_ring_size = 8192,
  			.num_pool_tx_desc = 32768,
  			.rx_desc_count = 12288,
 +			.rx_release_ring_size = 16384,
@@ -65,7 +65,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  };
 --- a/drivers/net/wireless/ath/ath12k/core.h
 +++ b/drivers/net/wireless/ath/ath12k/core.h
-@@ -941,6 +941,7 @@ struct ath12k_dp_profile_params {
+@@ -943,6 +943,7 @@ struct ath12k_dp_profile_params {
  	u32 rxdma_monitor_dst_ring_size;
  	u32 num_pool_tx_desc;
  	u32 rx_desc_count;

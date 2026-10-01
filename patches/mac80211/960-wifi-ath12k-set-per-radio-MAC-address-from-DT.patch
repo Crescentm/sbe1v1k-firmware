@@ -26,7 +26,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  
  #include "mac.h"
  #include "core.h"
-@@ -14565,6 +14566,7 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
+@@ -14598,6 +14599,7 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
  	struct ieee80211_iface_combination *combinations, *comb;
  	struct wiphy *wiphy = ah->hw->wiphy;
  	struct wiphy_radio *radio;
@@ -34,7 +34,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  	int n_combinations = 1;
  	struct ath12k *ar;
  	int i, ret;
-@@ -14602,10 +14604,16 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
+@@ -14635,10 +14637,16 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
  
  	/* there are multiple radios */
  
@@ -52,7 +52,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  	}
  
  	for_each_ar(ah, ar, i) {
-@@ -14628,6 +14636,8 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
+@@ -14661,6 +14669,8 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
  
  		radio[i].iface_combinations = comb;
  		radio[i].n_iface_combinations = 1;
@@ -61,7 +61,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  	}
  
  	ret = ath12k_mac_setup_global_iface_comb(ah, radio, ah->num_radio, combinations);
-@@ -14640,6 +14650,9 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
+@@ -14673,6 +14683,9 @@ static int ath12k_mac_setup_iface_combinations(struct ath12k_hw *ah)
  	wiphy->radio = radio;
  	wiphy->n_radio = ah->num_radio;
  
@@ -71,7 +71,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  out:
  	wiphy->iface_combinations = combinations;
  	wiphy->n_iface_combinations = n_combinations;
-@@ -14655,6 +14668,9 @@ err_free_radios:
+@@ -14688,6 +14701,9 @@ err_free_radios:
  
  	kfree(radio);
  
@@ -81,7 +81,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  err_free_combinations:
  	kfree(combinations);
  
-@@ -14809,6 +14825,17 @@ static int ath12k_mac_hw_register(struct ath12k_hw *ah)
+@@ -14842,6 +14858,17 @@ static int ath12k_mac_hw_register(struct ath12k_hw *ah)
  			ar->mac_addr[4] += ar->pdev_idx;
  		}
  
@@ -99,7 +99,7 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  		ret = ath12k_mac_setup_register(ar, &ht_cap_info, hw->wiphy->bands);
  		if (ret)
  			goto err_cleanup_unregister;
-@@ -14839,8 +14866,6 @@ static int ath12k_mac_hw_register(struct ath12k_hw *ah)
+@@ -14872,8 +14899,6 @@ static int ath12k_mac_hw_register(struct ath12k_hw *ah)
  
  		if (i == 0)
  			mac_addr = ar->mac_addr;

@@ -40,7 +40,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	u32 max_tx_ring;
 --- a/drivers/net/wireless/ath/ath12k/mac.c
 +++ b/drivers/net/wireless/ath/ath12k/mac.c
-@@ -9773,6 +9773,19 @@ static int ath12k_mac_start(struct ath12k *ar)
+@@ -9807,6 +9807,19 @@ static int ath12k_mac_start(struct ath12k *ar)
  		goto err;
  	}
  
