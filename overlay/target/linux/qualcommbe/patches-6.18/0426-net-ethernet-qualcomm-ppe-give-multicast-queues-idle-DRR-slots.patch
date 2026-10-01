@@ -1,0 +1,164 @@
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 12:00:00 +0800
+Subject: [PATCH] net: ethernet: qualcomm: ppe: give multicast queues idle
+ DRR scheduler slots
+
+ppe_port_sch_config maps each MAC port's four multicast queues onto the
+same L0 (flow, priority, DRR node) slots as its unicast queues 0-3. On
+port 4, for example, multicast queue 284 and unicast queue 192 both end
+up on L0 flow 48, priority 0, DRR node 96.
+
+Two queues sharing a DRR node is legal, but on IPQ807x it was seen to
+latch when both queues go from empty to non-empty at the same time: the
+unicast queue sits on the active list with no credit left, the multicast
+queue parks on the backup list, the rotation that would refresh the
+credit never happens, and both drop to about one dequeue per second
+until the node is rebuilt or the box is rebooted. Unicast queue 0 carries
+all best-effort traffic and the multicast queues carry all flooding, so
+this pairing is exercised all the time.
+
+The IPQ9574 L0 scheduler has the same layout (L0_FLOW_MAP_TBL 0x402000,
+L0_C/E_FLOW_CFG_TBL 0x404000/0x406000, same fields) and the same
+pairing. Move the multicast queues to the port's top unicast slots
+12-15 instead (port 4: queues 284-287 -> flow 49, priority 4-7, DRR
+nodes 108-111, paired with unicast queues 204-207). Those slots see no
+traffic unless the internal priority selects unicast queues 12-15, so
+the shared-node condition is removed for default configurations. The
+CPU port (port 0) is left as it is.
+
+Unlike IPQ807x, the IPQ9574 L1 level puts both of a port's L0 flows on
+the same L1 priority and DRR node (pri_max = 0 in ppe_port_sch_config),
+so this moves multicast from strict-priority sharing with best-effort
+unicast to an equal-weight DRR share against flow 0-7 traffic, instead
+of above it as on IPQ807x.
+
+Based on the OpenWrt qualcommax qca_ppe change by Julius Bairaktaris.
+
+Link: https://github.com/openwrt/openwrt/pull/24252
+Link: https://github.com/openwrt/openwrt/pull/24188
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_config.c
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_config.c
+@@ -125,6 +125,8 @@ struct ppe_scheduler_qm_config {
+  * @pri_max: Max priority configured.
+  * @flow_id: Strict priority ID.
+  * @drr_node_id: Node ID for scheduler.
++ * @slot_start: First scheduler slot (flow ID, priority and DRR node offset
++ *		from @flow_id and @drr_node_id) used by these nodes.
+  *
+  * PPE port scheduler configuration which decides the priority in the
+  * packet scheduler for the egress port.
+@@ -137,6 +139,7 @@ struct ppe_scheduler_port_config {
+ 	unsigned int pri_max;
+ 	unsigned int flow_id;
+ 	unsigned int drr_node_id;
++	unsigned int slot_start;
+ };
+ 
+ /**
+@@ -562,9 +565,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 272,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 36,
+ 		.drr_node_id	= 48,
++		.slot_start	= 12,
+ 	},
+ 	{
+ 		.port		= 2,
+@@ -589,9 +593,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 276,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 40,
+ 		.drr_node_id	= 64,
++		.slot_start	= 12,
+ 	},
+ 	{
+ 		.port		= 3,
+@@ -616,9 +621,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 280,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 44,
+ 		.drr_node_id	= 80,
++		.slot_start	= 12,
+ 	},
+ 	{
+ 		.port		= 4,
+@@ -643,9 +649,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 284,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 48,
+ 		.drr_node_id	= 96,
++		.slot_start	= 12,
+ 	},
+ 	{
+ 		.port		= 5,
+@@ -670,9 +677,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 288,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 52,
+ 		.drr_node_id	= 112,
++		.slot_start	= 12,
+ 	},
+ 	{
+ 		.port		= 6,
+@@ -697,9 +705,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 292,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 56,
+ 		.drr_node_id	= 128,
++		.slot_start	= 12,
+ 	},
+ 	{
+ 		.port		= 7,
+@@ -724,9 +733,10 @@ static const struct ppe_scheduler_port_config ppe_port
+ 		.flow_level	= false,
+ 		.node_id	= 296,
+ 		.loop_num	= 4,
+-		.pri_max	= 4,
++		.pri_max	= 8,
+ 		.flow_id	= 60,
+ 		.drr_node_id	= 144,
++		.slot_start	= 12,
+ 	},
+ };
+ 
+@@ -1706,15 +1716,17 @@ static int ppe_node_scheduler_config(struct ppe_device
+ 	int ret, i;
+ 
+ 	for (i = 0; i < config.loop_num; i++) {
++		unsigned int slot = config.slot_start + i;
++
+ 		if (!config.pri_max) {
+ 			/* Round robin scheduler without priority. */
+ 			sch_cfg.flow_id = config.flow_id;
+ 			sch_cfg.pri = 0;
+ 			sch_cfg.drr_node_id = config.drr_node_id;
+ 		} else {
+-			sch_cfg.flow_id = config.flow_id + (i / config.pri_max);
+-			sch_cfg.pri = i % config.pri_max;
+-			sch_cfg.drr_node_id = config.drr_node_id + i;
++			sch_cfg.flow_id = config.flow_id + (slot / config.pri_max);
++			sch_cfg.pri = slot % config.pri_max;
++			sch_cfg.drr_node_id = config.drr_node_id + slot;
+ 		}
+ 
+ 		/* Scheduler weight, must be more than 0. */

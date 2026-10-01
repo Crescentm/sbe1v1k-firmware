@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 15:01:18 +0800
+Subject: [PATCH] net: ethernet: qualcomm: ppe: keep EEE off at the PHYs
+
+The PPE MACs do not do 802.3az LPI: the driver gives phylink no
+lpi_capabilities and has no mac_*_tx_lpi ops. Without those ops phylink
+does not touch the PHY's EEE settings at all, so the QCA8075, QCA8081
+and RTL8261BE keep advertising EEE from their defaults and negotiate it
+with any partner that does too. The link then enters low-power idle
+that the MAC knows nothing about.
+
+Qualcomm's own driver does not allow this: qca-ssdk disables EEE on
+every port at init (qca_hppe_interface_mode_init() clears
+port_eee_cfg.enable and lpi_tx_enable), on IPQ95xx as well. On
+IPQ807x, OpenWrt's qca_ppe driver found that egress injected while a
+port wakes from LPI can wedge that port's queue manager, and users of
+this board report EEE-related latency jitter on the 10G WAN port.
+
+Provide empty mac_enable_tx_lpi/mac_disable_tx_lpi ops. With them and
+no lpi_capabilities, phylink_bringup_phy() takes its "MAC wants EEE
+always disabled" path and calls phy_disable_eee() before the first
+autonegotiation, so no port advertises EEE, and ethtool --set-eee is
+refused with -EOPNOTSUPP instead of turning on something the MAC cannot
+handle. The ops themselves are never called.
+
+Based on the OpenWrt qualcommax qca_ppe change by Julius Bairaktaris
+("qualcommax: qca_ppe: disable EEE to prevent idle-port egress wedge").
+
+Link: https://github.com/openwrt/openwrt/pull/24188
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+ drivers/net/ethernet/qualcomm/ppe/ppe_port.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/drivers/net/ethernet/qualcomm/ppe/ppe_port.c b/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
+index 1101161eb..5cf61810a 100644
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
+@@ -1124,11 +1124,27 @@ static struct phylink_pcs *ppe_port_mac_select_pcs(struct phylink_config *config
+ 	return ppe_port->pcs;
+ }
+ 
++/* The PPE MACs are not set up for LPI: no lpi_capabilities are given to
++ * phylink, so these are never called. Providing them makes phylink treat
++ * the MAC as "EEE always off" and disable EEE advertisement at the PHY.
++ */
++static int ppe_port_mac_enable_tx_lpi(struct phylink_config *config,
++				      u32 timer, bool tx_clk_stop)
++{
++	return 0;
++}
++
++static void ppe_port_mac_disable_tx_lpi(struct phylink_config *config)
++{
++}
++
+ static const struct phylink_mac_ops ppe_phylink_ops = {
+ 	.mac_config = ppe_port_mac_config,
+ 	.mac_link_up = ppe_port_mac_link_up,
+ 	.mac_link_down = ppe_port_mac_link_down,
+ 	.mac_select_pcs = ppe_port_mac_select_pcs,
++	.mac_disable_tx_lpi = ppe_port_mac_disable_tx_lpi,
++	.mac_enable_tx_lpi = ppe_port_mac_enable_tx_lpi,
+ };
+ 
+ static const phy_interface_t mac_interfaces[] = {

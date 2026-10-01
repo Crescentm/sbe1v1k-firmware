@@ -1,0 +1,156 @@
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 12:00:00 +0800
+Subject: [PATCH] net: ethernet: qualcomm: ppe: drain a port's egress path on
+ link down
+
+ppe_port_mac_link_down() closes the port's bridge TX gate
+(PORT_BRIDGE_CTRL.TXMAC_EN) and then tears the MAC down straight away.
+Qualcomm's own switch driver does not. In qca-ssdk
+qca_hppe_mac_sw_sync_task(), which is the link handler for HPPE (IPQ807x)
+and also for APPE (IPQ95xx), the link-down sequence is:
+
+  1. clear PORT_BRIDGE_CTRL.TXMAC_EN
+  2. wait 10ms
+  3. disable the MAC receiver
+  4. XGMAC only: set MAC_RX_CONFIGURATION.LM, wait 1ms, clear it
+     ("release ppe port egress packets when link down", qca-ssdk
+     "enable and disable loopback for xgmac to fix qm stuck issue")
+
+Packets that are still in a port's egress path when its link drops can
+wedge the PPE queue manager for that port. The port then comes back with
+its carrier up but never transmits again, and only a reboot clears it.
+This was found and fixed on IPQ807x by the OpenWrt qca_ppe driver; the
+IPQ9574 PPE uses the same PORT_BRIDGE_CTRL register (0x60300 + 4 * port,
+TXMAC_EN bit 16) and the same Synopsys XGMAC (RX configuration at
+0x500000 + (port - 1) * 0x4000 + 0x4, LM bit 10), and qca-ssdk runs the
+same sequence on it.
+
+Do the same here: wait 10ms after closing the gate, for both GMAC and
+XGMAC, and on XGMAC pulse loopback for 1ms after RX is disabled and
+before TX is. RX goes down first so the frames returned by the loop are
+dropped rather than forwarded as ingress of the port that is going down.
+The loopback is left alone if it is already set, like qca-ssdk does.
+
+The link-up side already matches qca-ssdk: TXMAC_EN is only set again as
+the last step of ppe_port_mac_link_up(), and probe only opens it on the
+CPU port.
+
+phylink calls mac_link_down() from process context (the resolve work or
+phylink_stop(), with state_mutex held), and this function already sleeps
+in cancel_delayed_work_sync(), so the sleeps are safe there.
+
+Based on the OpenWrt qualcommax qca_ppe change by Julius Bairaktaris.
+
+Link: https://github.com/openwrt/openwrt/pull/24188
+Link: https://git.codelinaro.org/clo/qsdk/oss/lklm/qca-ssdk
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
+@@ -6,6 +6,7 @@
+ /* PPE Port MAC initialization and PPE port MAC functions. */
+ 
+ #include <linux/clk.h>
++#include <linux/delay.h>
+ #include <linux/of.h>
+ #include <linux/of_net.h>
+ #include <linux/pcs/pcs-qcom-ipq9574.h>
+@@ -22,6 +23,17 @@
+ /* PPE BM port start for PPE MAC ports */
+ #define PPE_BM_PORT_MAC_START			7
+ 
++/* Time given to the PPE on link down to push out what is already past
++ * the port's bridge TX gate before the MAC is torn down. Same 10ms as
++ * qca-ssdk qca_hppe_mac_sw_sync_task().
++ */
++#define PPE_PORT_EGRESS_DRAIN_US		10000
++
++/* XGMAC loopback window used to release the MAC's egress path on link
++ * down, qca-ssdk: "1ms is enough to release all packets".
++ */
++#define PPE_PORT_XGMAC_LB_DRAIN_US		1000
++
+ /* Poll interval time to poll GMAC MIBs for overflow protection,
+  * the time should ensure that the 32bit GMAC packet counter
+  * register would not overflow within this time at line rate
+@@ -992,6 +1004,35 @@ static int ppe_port_gmac_link_down(struct ppe_port *pp
+ 	return regmap_clear_bits(ppe_dev->regmap, reg, GMAC_TRXEN);
+ }
+ 
++/* Release what is still in an XGMAC port's egress path by briefly looping
++ * the transmitter back into the MAC, as qca-ssdk does on link down
++ * (adpt_hppe_port_mac_loopback_reset(), "enable and disable loopback for
++ * xgmac to fix qm stuck issue"). Packets stranded there when the link drops
++ * can wedge the PPE queue manager for that port until reboot. Must run with
++ * RX already disabled, so the looped frames are dropped instead of being
++ * forwarded as ingress of this port, and with TX still enabled, since the
++ * loop is only a way out for the queued packets while the transmitter runs.
++ */
++static int ppe_port_xgmac_egress_release(struct ppe_port *ppe_port)
++{
++	struct ppe_device *ppe_dev = ppe_port->ppe_dev;
++	u32 reg = PPE_PORT_XGMAC_ADDR(ppe_port->port_id) + XGMAC_RX_CONFIG_ADDR;
++	int ret;
++
++	/* Leave a loopback that somebody else enabled alone, like qca-ssdk */
++	ret = regmap_test_bits(ppe_dev->regmap, reg, XGMAC_LM);
++	if (ret)
++		return ret < 0 ? ret : 0;
++
++	ret = regmap_set_bits(ppe_dev->regmap, reg, XGMAC_LM);
++	if (ret)
++		return ret;
++
++	fsleep(PPE_PORT_XGMAC_LB_DRAIN_US);
++
++	return regmap_clear_bits(ppe_dev->regmap, reg, XGMAC_LM);
++}
++
+ /* PPE port XGMAC link down configuration */
+ static int ppe_port_xgmac_link_down(struct ppe_port *ppe_port)
+ {
+@@ -999,13 +1040,19 @@ static int ppe_port_xgmac_link_down(struct ppe_port *p
+ 	int ret, port = ppe_port->port_id;
+ 	u32 reg;
+ 
+-	/* Disable XGMAC RX and TX */
++	/* Disable XGMAC RX */
+ 	reg = PPE_PORT_XGMAC_ADDR(port);
+ 	ret = regmap_clear_bits(ppe_dev->regmap,
+ 				reg + XGMAC_RX_CONFIG_ADDR, XGMAC_RXEN);
+ 	if (ret)
+ 		return ret;
+ 
++	/* Release the egress path before the transmitter goes down */
++	ret = ppe_port_xgmac_egress_release(ppe_port);
++	if (ret)
++		return ret;
++
++	/* Disable XGMAC TX */
+ 	return regmap_clear_bits(ppe_dev->regmap,
+ 				 reg + XGMAC_TX_CONFIG_ADDR, XGMAC_TXEN);
+ }
+@@ -1027,6 +1074,13 @@ static void ppe_port_mac_link_down(struct phylink_conf
+ 	ret = regmap_clear_bits(ppe_dev->regmap, reg, PPE_PORT_BRIDGE_TXMAC_EN);
+ 	if (ret)
+ 		goto err_port_mac_link_down;
++
++	/* Let the egress path drain before the MAC goes away: packets left
++	 * there when the link drops can wedge the queue manager, so the port
++	 * gets its carrier back but never transmits again. phylink calls
++	 * mac_link_down() from process context, so sleeping is fine here.
++	 */
++	fsleep(PPE_PORT_EGRESS_DRAIN_US);
+ 
+ 	if (mac_type == PPE_MAC_TYPE_GMAC)
+ 		ret = ppe_port_gmac_link_down(ppe_port);
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_regs.h
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_regs.h
+@@ -720,6 +720,7 @@
+ /* XGMAC RX configuration register */
+ #define XGMAC_RX_CONFIG_ADDR			0x4
+ #define XGMAC_GPSL_M				GENMASK(29, 16)
++#define XGMAC_LM				BIT(10)
+ #define XGMAC_WD				BIT(7)
+ #define XGMAC_GPSLEN				BIT(6)
+ #define XGMAC_CST				BIT(2)
