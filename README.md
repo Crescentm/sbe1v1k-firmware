@@ -18,6 +18,13 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 | lan2/lan3 所在 QSGMII 通道的 CRC 错误 | DTS：QCA8075 发送幅度改为原厂的 300 mV |
 | HTTP U-Boot "large" 分区布局下 sysupgrade 写错分区 | `platform.sh` 按分区名识别 `kernel` 分区 |
 | ath12k 高负载下掉线 | 首次启动时关闭 packet steering |
+| 以太网中断全部压在 CPU0 | EDMA 收发中断按队列分到 4 个核 |
+| PPE 驱动的 double free、NAPI 卡死、端口回滚越界、MTU 先改后校验 | PPE/EDMA 修复（OpenWrt PR #24191、#25405 等） |
+| WAN 灯乱闪 | RTL8261 LED 驱动支持和 DTS 声明，灯按速率显示 |
+| 5 GHz 退回 20 MHz | 5/6 GHz 关闭 20/40 MHz 共存扫描（`noscan`） |
+| 开机时 `PHY is undefined`、断电后 `board.json` 为空 | wifi-scripts（OpenWrt PR #25471、#25473） |
+| ath12k 的 regulatory 超时、越界读写、GTK rekey 掉线等 | 主线 7.3-rc 和 ath-next 的 ath12k 修复 |
+| WiFi 卡拿不到原厂那样的专用内存 | 按原厂给三块 QCN9274 各预留 50 MiB host DDR |
 
 每个补丁的来源、原作者和上游状态见 [patches/README.md](patches/README.md)。
 

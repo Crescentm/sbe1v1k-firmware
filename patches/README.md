@@ -9,6 +9,13 @@
 | `mac80211/` | copied to `package/kernel/mac80211/patches/ath12k/` | ath12k fixes for the tri-radio WSI setup and per-radio MACs |
 | `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, SAE on 6 GHz |
 
+Details for the patches added on 2026-10-01:
+
+- [platform.md](platform.md): kernel 6.18.54, PPE/EDMA fixes, IRQ spreading,
+  WAN LEDs, lan1 2500base-x and QCA8081 hibernation
+- [wifi.md](wifi.md): upstream ath12k fixes, regulatory, WSI device id v3,
+  reserved host DDR, board.json and iwinfo per-radio filtering
+
 The notes below record where the WiFi patches came from and their upstream
 status. They were first validated against the ImmortalWrt SDK, then built and
 tested on hardware from ImmortalWrt master `bf156b68e3`.
