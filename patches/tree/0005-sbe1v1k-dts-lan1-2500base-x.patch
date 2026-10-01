@@ -6,14 +6,18 @@ use, so phylink already switches the PCS to SGMII or 2500BASE-X at
 link-up. "usxgmii" only selected the initial (pre-link) mode, which made
 the PCS run the USXGMII/XPCS bring-up for a PHY that never speaks it.
 Use 2500base-x like the 8devices Kiwi (also QCA8081 on uniphy1).
-"managed = in-band-status" stays: SGMII uses in-band AN; for 2500BASE-X
-the PCS reports LINK_INBAND_DISABLE only, so phylink falls back to
-outband/PHY mode on its own.
+
+Drop "managed = in-band-status" as the Kiwi does. With in-band and an
+802.3z mode, phylink treats the port like an SFP cage and never
+connects the PHY (phylink_fwnode_phy_connect() returns early), so the
+MAC stayed in 2500BASE-X: a 2.5G link partner worked, but at 1G the PHY
+switched its SerDes to SGMII and no traffic passed. Without it, phylink
+attaches the PHY and follows its interface changes.
 
 diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
 --- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
 +++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
-@@ -449,7 +449,13 @@
+@@ -449,10 +449,15 @@
  
  		port@5 {
  			reg = <5>;
@@ -27,4 +31,7 @@ diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qual
 +			phy-mode = "2500base-x";
  			phy-handle = <&qca8081_28>;
  			pcs-handle = <&pcs1_ch0>;
- 			managed = "in-band-status";
+-			managed = "in-band-status";
+ 			label = "lan1";
+ 
+ 			nvmem-cells = <&ethaddr 1>;

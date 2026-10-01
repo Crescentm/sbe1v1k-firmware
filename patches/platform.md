@@ -224,19 +224,25 @@ order. 0363 lands right after 0362.
   LINK_INBAND_DISABLE for 2500BASEX and DISABLE|ENABLE for SGMII.
 - **PPE:** 2500BASEX is in `mac_interfaces[]` and selects XGMAC; SGMII
   selects GMAC.
-- **In-band setting:** `managed = "in-band-status"` stays. Per
-  `phylink_pcs_neg_mode()`:
-  - 2500BASEX with a PHY whose `inband_caps` are unknown resolves to
-    PHYLINK_PCS_NEG_OUTBAND / MLO_AN_PHY without a warning;
-  - SGMII keeps in-band AN, as it does now.
+- **In-band setting:** `managed = "in-band-status"` is removed, as on
+  the 8devices Kiwi (same uniphy1/port 5, same PHY).
+  - The first version kept it, reasoning from `phylink_pcs_neg_mode()`.
+    That was wrong: with in-band and an 802.3z mode,
+    `phylink_fwnode_phy_connect()` returns before attaching the PHY
+    (`phylink_expects_phy()` is false), so lan1 had no phydev at all.
+  - Hardware result of that version (RAM boot, 2026-10-01): a 2.5G NAS
+    linked and passed traffic; a 1G Mac adapter linked at the PHY
+    (1000baseT on the Mac) but lan1 stayed down, no LED, no DHCP. The PHY
+    had moved its SerDes to SGMII while the MAC stayed in 2500BASE-X.
+  - Without `managed`, phylink runs in PHY mode, attaches the QCA8081
+    and follows its SGMII/2500BASE-X changes.
 
-  The 8devices Kiwi uses `2500base-x` on the same uniphy1/port 5 without
-  `managed`. Both work.
 - **Not used on this board:** uniphy1 has no `qcom,uniphy-clkout-25mhz`, so
   nothing depends on the USXGMII bring-up path.
 - **Risk:** low to moderate. In the worst case lan1 does not come up, and
   wan, lan2 and lan3 are unaffected. Test with the initramfs (RAM boot)
-  first: link at 2.5G and 1G, and plug/unplug cycles.
+  first: link at 2.5G and 1G (both must pass traffic), and plug/unplug
+  cycles. `ls /sys/class/net/lan1/phydev` must exist.
 - **Upstream:** not upstream.
 
 ## T2b: 0415 QCA8081 hibernation off (test item)
