@@ -20,7 +20,7 @@ OUT=${OUT:-$REPO/out/src-$(date +%Y%m%d-%H%M%S)}
 die() { echo "error: $*" >&2; exit 1; }
 log() { echo "==> $*"; }
 
-[ -d "$SRC/.git" ] || die "source tree not found at $SRC"
+[ -e "$SRC/.git" ] || die "source tree not found at $SRC"
 cd "$SRC"
 
 if [ "${UPDATE:-0}" = 1 ]; then
