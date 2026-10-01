@@ -92,7 +92,8 @@ RELEASE=${RELEASE:-$(./scripts/getver.sh)-$(cd "$REPO" &&
 arch=$(sed -n 's/^CONFIG_TARGET_ARCH_PACKAGES="\(.*\)"$/\1/p' .config)
 # Only feeds the image itself installs from end up with an index here.
 our_feeds="base luci packages"
-feeds="base luci packages routing telephony video"
+# ImmortalWrt publishes no video feed for snapshots.
+feeds="base luci packages routing telephony"
 mkdir -p files/etc/apk/repositories.d
 {
 	echo "# SBE1V1K firmware $RELEASE"
