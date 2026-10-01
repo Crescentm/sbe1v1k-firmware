@@ -1,0 +1,106 @@
+name: Build firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_ref:
+        description: ImmortalWrt commit, tag or branch
+        default: master
+  schedule:
+    - cron: "17 19 * * 0"   # Monday 03:17 China time
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      SRC: ${{ github.workspace }}/immortalwrt
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af >/dev/null
+          df -h /
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential clang flex bison g++ \
+            gawk gcc-multilib g++-multilib gettext git libncurses-dev \
+            libssl-dev python3-setuptools python3-pyelftools rsync swig \
+            unzip zlib1g-dev file wget zstd ccache
+
+      - uses: actions/checkout@v4
+        with:
+          path: firmware
+
+      - name: Fetch ImmortalWrt
+        run: |
+          git clone --filter=blob:none https://github.com/immortalwrt/immortalwrt.git "$SRC"
+          git -C "$SRC" checkout -q "${{ inputs.immortalwrt_ref || 'master' }}"
+          cd "$SRC"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          echo "IMMORTALWRT_REV=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Install signing key
+        env:
+          APK_SIGN_KEY: ${{ secrets.APK_SIGN_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$APK_SIGN_KEY" > "$SRC/private-key.pem"
+          cp firmware/keys/sbe1v1k-apk.pem "$SRC/public-key.pem"
+          openssl ec -in "$SRC/private-key.pem" -pubout 2>/dev/null |
+            cmp - "$SRC/public-key.pem"
+
+      - uses: actions/cache@v4
+        with:
+          # CONFIG_CCACHE keeps its cache in the tree's .ccache
+          path: |
+            immortalwrt/.ccache
+            immortalwrt/dl
+          key: build-${{ env.IMMORTALWRT_REV }}-${{ github.run_id }}
+          restore-keys: build-
+
+      - name: Build
+        run: sh firmware/scripts/src-build.sh
+
+      - name: Collect release files
+        id: collect
+        run: |
+          release=$(cat "$OUT/release")
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          tar -C "$OUT/feed" -I 'zstd -T0 -19' -cf "$OUT/feed-$release.tar.zst" .
+          rm -rf "$OUT/feed"
+          ls -la "$OUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=${{ steps.collect.outputs.release }}
+          cd "$OUT"
+          {
+            echo "ImmortalWrt \`$(cat immortalwrt-rev)\`, firmware recipe \`${{ github.sha }}\`."
+            echo
+            echo "Package feed: https://crescentm.github.io/sbe1v1k-packages/$release/"
+            echo "(published by sbe1v1k-packages shortly after this release)."
+            if [ -s failed-packages.txt ]; then
+              echo
+              echo "Feed-only packages that failed to build:"
+              echo '```'; cat failed-packages.txt; echo '```'
+            fi
+          } > notes.md
+          gh release create "$release" -R "${{ github.repository }}" \
+            --target "${{ github.sha }}" --title "$release" --notes-file notes.md \
+            *.bin *.itb *.manifest sha256sums *.buildinfo profiles.json \
+            "feed-$release.tar.zst"

@@ -46,8 +46,10 @@ SRC=/path/to/immortalwrt sh scripts/src-build.sh
 - 依赖与 OpenWrt 编译环境相同。用 Nix 的话，`nix run .` 会进入一个 FHS 编译环境。
 - `STAGE=prepare` 只打补丁、生成配置，不编译。
 - 产物在 `out/src-<时间>/`：固件镜像在根目录，软件源在 `feed/`。
-- `scripts/publish-feed.sh` 把一次构建的软件源加入 Pages 站点目录。
-- GitHub Actions 的构建流程见 `.github/workflows/`。
+- GitHub Actions（`.github/workflows/build.yml`）每周或手动触发，编译后把固件和打包好的软件源
+  （`feed-<发布名>.tar.zst`）发布到 Releases；
+  [sbe1v1k-packages](https://github.com/Crescentm/sbe1v1k-packages) 再把最近几个版本的软件源发布到 GitHub Pages。
+- 软件包签名公钥：[keys/sbe1v1k-apk.pem](keys/sbe1v1k-apk.pem)。
 
 ## 许可
 
