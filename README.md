@@ -19,8 +19,7 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 | HTTP U-Boot "large" 分区布局下 sysupgrade 写错分区 | `platform.sh` 按分区名识别 `kernel` 分区 |
 | ath12k 高负载下掉线 | 首次启动时关闭 packet steering |
 
-每个改动的来源、上游状态和取舍理由见 [docs/SOURCES.md](docs/SOURCES.md) 与
-[patches/README.md](patches/README.md)。
+每个补丁的来源、原作者和上游状态见 [patches/README.md](patches/README.md)。
 
 预装：中文 LuCI、fullcone NAT、UPnP、SQM（cake）、WireGuard、irqbalance 及常用诊断工具，
 全部来自 ImmortalWrt 官方源，见 [packages.txt](packages.txt)。
