@@ -319,7 +319,7 @@ others.
 | R4d MP5496 supply names | fix | `overlay/.../patches-6.18/0432` |
 | R4e thermal step_wise stale vote | fix | `overlay/.../patches-6.18/0433` |
 | R4f dtc warnings | fix | `tree/0030-sbe1v1k-dts-fix-dtc-warnings.patch` |
-| R5 fan PWM 1 kHz | test | `tree/0032-sbe1v1k-dts-fan-pwm-1khz.patch` |
+| R5 fan PWM 1 kHz | dropped | was `tree/0032-sbe1v1k-dts-fan-pwm-1khz.patch` |
 | R6 rtpengine kmod on 6.18 | fix | `overlay/feeds/telephony/net/rtpengine/patches/105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch` |
 | R8 lan2/lan3 LEDs | test | `tree/0031-sbe1v1k-dts-lan2-lan3-phy-leds.patch`, `overlay/.../ipq95xx/base-files/etc/board.d/01_leds` |
 
@@ -542,7 +542,12 @@ DTB builds with **no dtc warnings**. These are the same changes as
 OneNAS b6fc7b1f43. Not taken from that commit: its `cma=256M` /
 reserved CMA pool, which is a policy choice rather than a fix.
 
-## R5: tree/0032 fan PWM 1 kHz (test)
+## R5: tree/0032 fan PWM 1 kHz (dropped)
+
+Dropped after the first RAM boot (2026-10-01): the router made a
+continuous audible tone, as expected from a fan driven at 1 kHz. The
+board keeps its 25 kHz period. The notes below are kept for reference.
+
 
 - **Board:** `pwms = <&pwm 3 40000 0>` (25 kHz) since the board was
   added in January. Cooling levels are 36/72/128/255 at trips
@@ -643,7 +648,7 @@ Run on 2026-10-01 in `~/owrt/wt-plat` (ImmortalWrt `bf156b68e3`), with
 everything in this repo applied, including the WiFi agent's files:
 
 - **`STAGE=prepare`:** OK. The new overlay files (kernel patches, the
-  rtpengine patch, 01_leds) are copied, and tree 0030–0032 apply after
+  rtpengine patch, 01_leds) are copied, and tree 0030–0032 (0032 since dropped) apply after
   0001–0011.
 - **`make target/linux/{clean,prepare} V=s`:** every generic and
   qualcommbe patch applies, none with fuzz or offset. 0424 was refreshed onto 0420.
@@ -708,9 +713,8 @@ RAM boot (initramfs) first.
      are the other way round, swap them in 0031;
    - on an upgraded config: `rm /etc/board.json; board_detect` and
      check `uci show system | grep lan2`.
-7. **Fan (0032):** at idle and under load, listen and read
-   `/sys/class/hwmon/*/pwm1` and the zone temperatures; compare with a
-   25 kHz build.
+7. **Fan:** no audible tone at any cooling level (0032 was dropped for
+   this).
 8. **Regulators (0432):** `dmesg | grep -i "resolved to itself"` is
    empty, cpufreq still scales up to 2.2 GHz.
 9. **rtpengine (feed):** `apk add kmod-ipt-rtpengine` and

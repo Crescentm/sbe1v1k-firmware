@@ -29,7 +29,7 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 | 网口断开后 PPE 发送队列卡住、组播队列饿死、EEE 引起断流 | PPE 断链排空、组播 DRR、关闭 EEE（移植 qualcommax PR #24188/#24252，测试档） |
 | PCIe 链路掉线后 WiFi 卡无法恢复 | 主线 PCIe root port 复位（测试档） |
 | phylink、qca808x LED 极性、MP5496 供电名、温控等上游已修的问题 | 回移主线修复 |
-| lan2/lan3 灯不受控、风扇 PWM 频率 | DTS 声明 lan2/lan3 端口灯；风扇 PWM 改为 1 kHz（均为测试档） |
+| lan2/lan3 灯不受控 | DTS 声明 lan2/lan3 端口灯（测试档） |
 | rtpengine 内核模块在新内核上编不过 | Kbuild 修复（rtpengine 上游 `38700abf0b79`） |
 | mac80211/cfg80211 的 use-after-free、mesh、CSA、VLAN 等问题 | Linux 7.2.y 稳定版、7.3-rc 和 wireless.git 的全部相关修复 |
 | ath12k 的 MLO、SSR、TX DMA、扫描死锁、监听模式等问题 | 主线、ath-next 和邮件列表的 ath12k 修复；wake_tx_queue 流控等较新的放在测试档 |

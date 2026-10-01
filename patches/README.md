@@ -14,7 +14,7 @@ Details for the patches added on 2026-10-01 (rounds 1 and 2):
 - [platform.md](platform.md): kernel 6.18.54, PPE/EDMA fixes, IRQ spreading,
   WAN LEDs, lan1 2500base-x and QCA8081 hibernation; round 2: watchdog
   bootstatus, PCIe reset, PPE egress/EEE, upstream phylink/LED/regulator/thermal
-  fixes, lan2/lan3 LEDs, fan PWM
+  fixes, lan2/lan3 LEDs
 - [wifi.md](wifi.md): upstream ath12k fixes, regulatory, WSI device id v3,
   reserved host DDR, board.json and iwinfo per-radio filtering; round 2:
   mac80211/cfg80211 stable and wireless.git fixes, more ath12k fixes, hostapd
