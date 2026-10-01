@@ -25,16 +25,19 @@ Link: https://github.com/openwrt/openwrt/pull/23914
  1 or 3, hostapd then refuses the BSS ("Pre-RSNA security methods are
  not allowed in 6 GHz"), and iface_mfp() sets up no PMF for wpa < 2.
  This replaces the earlier local 952, which did the same upgrade with
- its own code; its file name is kept.]
+ its own code; its file name is kept. Also drop TKIP from wpa_pairwise
+ on 6 GHz (falling back to CCMP if nothing is left): the tkip and
+ tkip+ccmp suffixes (e.g. psk2+tkip, psk-mixed+tkip+ccmp, wpa2+tkip)
+ otherwise make hostapd refuse the BSS, as TKIP is not allowed there.]
 ---
- files-ucode/usr/share/ucode/wifi/ap.uc | 10 ++++++++--
- 1 file changed, 8 insertions(+), 2 deletions(-)
+ files-ucode/usr/share/ucode/wifi/ap.uc | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
 
 diff --git a/files-ucode/usr/share/ucode/wifi/ap.uc b/files-ucode/usr/share/ucode/wifi/ap.uc
-index 51e2fe1d..d1ba93fb 100644
+index 51e2fe1..085a3f2 100644
 --- a/files-ucode/usr/share/ucode/wifi/ap.uc
 +++ b/files-ucode/usr/share/ucode/wifi/ap.uc
-@@ -568,10 +568,16 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
+@@ -568,10 +568,24 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
  
  	iface.parse_encryption(config, data.config, phy_features);
  	if (data.config.band == '6g') {
@@ -50,6 +53,14 @@ index 51e2fe1d..d1ba93fb 100644
 +		 */
 +		if (config.wpa)
 +			config.wpa = 2;
++		/*
++		 * TKIP is not allowed on 6 GHz either: drop it from the
++		 * pairwise ciphers of the tkip and tkip+ccmp suffixes.
++		 */
++		if (config.wpa_pairwise) {
++			let pairwise = filter(split(config.wpa_pairwise, ' '), c => c != 'TKIP');
++			config.wpa_pairwise = length(pairwise) ? join(' ', pairwise) : 'CCMP';
++		}
  	}
  
  	if (config.auth_type in [ 'psk', 'psk-sae', 'psk-sae-compat' ] && data.config.band != '6g')
