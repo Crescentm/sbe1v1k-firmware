@@ -4,23 +4,30 @@
 # four CPUs share the L2) and the GIC then delivers every one to CPU0.
 # Keep irqbalance away from them. --banmod cannot match platform IRQs, so
 # ban them by number, refreshed on each boot before irqbalance starts.
+# The numbers we added are remembered in sbe1v1k_banirq, so entries the
+# user put in banirq are left alone.
 
 START=89
 
 boot() {
-	local irqs cur
+	local irqs old irq
 
 	irqs=$(awk -F: '/ (rxdesc|txcmpl)_[0-9]+$/ { gsub(/ /, "", $1); print $1 }' \
 		/proc/interrupts | sort -n | tr '\n' ' ')
 	irqs=${irqs% }
 	[ -n "$irqs" ] || return 0
 
-	cur=$(uci -q get irqbalance.irqbalance.banirq)
-	[ "$cur" = "$irqs" ] && return 0
+	old=$(uci -q get irqbalance.irqbalance.sbe1v1k_banirq)
+	[ "$old" = "$irqs" ] && return 0
 
-	uci -q delete irqbalance.irqbalance.banirq
+	for irq in $old; do
+		uci -q del_list irqbalance.irqbalance.banirq="$irq"
+	done
+	uci -q delete irqbalance.irqbalance.sbe1v1k_banirq
 	for irq in $irqs; do
+		uci -q del_list irqbalance.irqbalance.banirq="$irq"
 		uci -q add_list irqbalance.irqbalance.banirq="$irq"
+		uci -q add_list irqbalance.irqbalance.sbe1v1k_banirq="$irq"
 	done
 	uci -q commit irqbalance
 }
