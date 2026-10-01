@@ -1,0 +1,48 @@
+From 43ee60e13c257d33d25bfb6892b9ee38fb6e88a4 Mon Sep 17 00:00:00 2001
+From: Wei Zhang <wei.zhang@oss.qualcomm.com>
+Date: Mon, 21 Sep 2026 18:27:28 +0800
+Subject: [PATCH] nl80211: Add FT-SAE AKMs to the fallback key_mgmt capability
+
+wpa_driver_nl80211_capa() falls back to a hardcoded key_mgmt guess when
+the driver does not advertise AKM capabilities through
+NL80211_ATTR_AKM_SUITES or NL80211_ATTR_IFTYPE_AKM_SUITES. For
+SME-in-wpa_supplicant drivers, this fallback already includes SAE and
+SAE_EXT_KEY, but the FT variants, FT_SAE and FT_SAE_EXT_KEY, were
+missing even though other FT variants, like WPA_DRIVER_CAPA_KEY_MGMT_FT,
+are included.
+
+The RSN AKM selection in wpa_supplicant_set_suites() checks
+WPA_KEY_MGMT_FT_SAE_EXT_KEY and WPA_KEY_MGMT_FT_SAE ahead of the non-FT
+variants, and the SAE family as a whole (FT and non-FT) is already gated
+by WPA_DRIVER_FLAGS_SAE independently of this fallback. Since FTEs are
+handled entirely inside wpa_supplicant through sme_update_ft_ies() for
+SME-in-wpa_supplicant cases, without any driver-specific callback, there
+is no additional driver capability that FT-SAE requires beyond what SAE
+and SME already imply. The missing bits in this fallback therefore
+prevented capable drivers from ever reporting FT-SAE support, keeping
+wpa_supplicant from selecting it even when preferred.
+
+Add WPA_DRIVER_CAPA_KEY_MGMT_FT_SAE and
+WPA_DRIVER_CAPA_KEY_MGMT_FT_SAE_EXT_KEY to the same fallback OR list.
+
+Signed-off-by: Wei Zhang <wei.zhang@oss.qualcomm.com>
+(cherry picked from commit 43ee60e13c257d33d25bfb6892b9ee38fb6e88a4)
+---
+ src/drivers/driver_nl80211_capa.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index 43ce19834..0a8178d26 100644
+--- a/src/drivers/driver_nl80211_capa.c
++++ b/src/drivers/driver_nl80211_capa.c
+@@ -1979,7 +1979,9 @@ int wpa_driver_nl80211_capa(struct wpa_driver_nl80211_data *drv)
+ 				WPA_DRIVER_CAPA_KEY_MGMT_FT_FILS_SHA256 |
+ 				WPA_DRIVER_CAPA_KEY_MGMT_FT_FILS_SHA384 |
+ 				WPA_DRIVER_CAPA_KEY_MGMT_SAE_EXT_KEY |
+-				WPA_DRIVER_CAPA_KEY_MGMT_SAE;
++				WPA_DRIVER_CAPA_KEY_MGMT_SAE |
++				WPA_DRIVER_CAPA_KEY_MGMT_FT_SAE |
++				WPA_DRIVER_CAPA_KEY_MGMT_FT_SAE_EXT_KEY;
+ 		else if (drv->capa.flags & WPA_DRIVER_FLAGS_FILS_SK_OFFLOAD)
+ 			drv->capa.key_mgmt |=
+ 				WPA_DRIVER_CAPA_KEY_MGMT_FILS_SHA256 |

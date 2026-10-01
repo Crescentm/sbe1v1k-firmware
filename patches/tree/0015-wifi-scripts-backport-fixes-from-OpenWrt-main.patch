@@ -1,0 +1,106 @@
+From 54a6f4ee1eded0a38ac0dbb7a322f0d53da6a9c4 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Fri, 4 Sep 2026 13:36:44 +0200
+Subject: [PATCH] wifi-scripts: declare the dpp option in the wifi-iface schema
+
+iface.uc adds the DPP AKM beside the one the encryption keyword selects when
+`dpp` is set, which is how a credential naming several AKMs is expressed, but
+the option was in no schema. netifd answered "dpp is not present in the
+schema" on every reload that used it.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 54a6f4ee1eded0a38ac0dbb7a322f0d53da6a9c4)
+---
+ .../files-ucode/usr/share/schema/wireless.wifi-iface.json    | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-iface.json b/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-iface.json
+index 25e151fd..1991ac83 100644
+--- a/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-iface.json
++++ b/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-iface.json
+@@ -270,6 +270,11 @@
+ 			"type": "boolean",
+ 			"default": true
+ 		},
++		"dpp": {
++			"description": "Enable the DPP AKM in addition to the one selected by encryption",
++			"type": "boolean",
++			"default": false
++		},
+ 		"domain_match": {
+ 			"type": "array",
+ 			"items": {
+From 2de3225246a87db0b1d01cee62f5ec538f215c62 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Sun, 13 Sep 2026 08:52:31 +0200
+Subject: [PATCH] wifi-scripts: take the regdomain from the provisioning
+ partition
+
+A factory reset drops /etc/config/wireless, so a regdomain that the user
+set there is gone after the reset. The provisioning partition survives a
+factory reset, so read "wireless.country" from it and let it override the
+country from board.json when the wireless config is generated:
+
+  provision set wireless.country DE
+
+A provisioned country also keeps the default 5G and 6G interfaces
+enabled, which is what a board.json country does today.
+
+The provision package is optional, so the module is loaded at runtime and
+a missing module leaves the previous behaviour unchanged.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 2de3225246a87db0b1d01cee62f5ec538f215c62)
+---
+ .../wifi-scripts/files/lib/wifi/mac80211.uc   | 28 +++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc b/package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc
+index 977ef411..df099984 100644
+--- a/package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc
++++ b/package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc
+@@ -9,6 +9,26 @@ let board = json(readfile("/etc/board.json"));
+ if (!board.wlan)
+ 	exit(0);
+ 
++function provision_country_get() {
++	let provision;
++
++	try {
++		provision = import("provision");
++	} catch (e) {
++		return;
++	}
++
++	let ctx = provision.open();
++	if (!ctx)
++		return;
++
++	ctx.init();
++
++	return ctx.get("wireless.country");
++}
++
++let provision_country = provision_country_get();
++
+ let idx = 0;
+ let commit;
+ 
+@@ -88,11 +108,15 @@ for (let phy_name, phy in board.wlan) {
+ 		if (board.wlan.defaults) {
+ 			defaults = board.wlan.defaults.ssids?.[band_name]?.ssid ? board.wlan.defaults.ssids?.[band_name] : board.wlan.defaults.ssids?.all;
+ 			country = board.wlan.defaults.country;
+-			if (!country && band_name != '2g')
+-				defaults = null;
+ 			num_global_macaddr = board.wlan.defaults.ssids?.[band_name]?.mac_count;
+ 		}
+ 
++		if (provision_country)
++			country = provision_country;
++
++		if (!country && band_name != '2g')
++			defaults = null;
++
+ 		if (length(info.radios) > 0)
+ 			id += `\nset ${s}.radio='${radio.index}'`;
+ 

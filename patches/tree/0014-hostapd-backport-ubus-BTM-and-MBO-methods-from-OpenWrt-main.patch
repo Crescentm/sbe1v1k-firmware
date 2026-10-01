@@ -1,0 +1,343 @@
+From aa99fb89a0d2e63522d9ec42950bad02b1270d63 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Wed, 23 Sep 2026 22:05:23 +0200
+Subject: [PATCH] hostapd: add a ubus method to set MBO Association Disallowed
+
+hostapd holds the MBO Association Disallowed attribute in its own
+MBO-OCE element and sets it through the control interface command
+"SET mbo_assoc_disallow", which no ubus method reaches. A daemon that
+wants to advertise it has to add a second MBO-OCE element as a vendor
+element, and wpa_supplicant reads the attribute only from the first
+MBO-OCE element of a frame.
+
+Add mbo_assoc_disallow { iface, reason } to the hostapd object. It sets
+the reason on every BSS of that name, which covers each link of an AP
+MLD; a reason of 0 allows association again.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit aa99fb89a0d2e63522d9ec42950bad02b1270d63)
+---
+ .../network/services/hostapd/files/hostapd.uc | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/package/network/services/hostapd/files/hostapd.uc b/package/network/services/hostapd/files/hostapd.uc
+index e92425a6..ffe10b74 100644
+--- a/package/network/services/hostapd/files/hostapd.uc
++++ b/package/network/services/hostapd/files/hostapd.uc
+@@ -1791,6 +1791,31 @@ let main_obj = {
+ 			return ret;
+ 		}
+ 	},
++	mbo_assoc_disallow: {
++		args: {
++			iface: "",
++			reason: 0,
++		},
++		call: function(req) {
++			if (!req.args.iface)
++				return libubus.STATUS_INVALID_ARGUMENT;
++
++			// Every link of an AP MLD is a BSS of its own, and each builds
++			// its own Beacon.
++			let found = false;
++			for (let phy, bss_list in hostapd.bss) {
++				let bss = bss_list[req.args.iface];
++				if (!bss)
++					continue;
++
++				found = true;
++				if (bss.ctrl(`SET mbo_assoc_disallow ${+req.args.reason}`) != "OK")
++					return libubus.STATUS_UNKNOWN_ERROR;
++			}
++
++			return found ? 0 : libubus.STATUS_NOT_FOUND;
++		}
++	},
+ 	status: {
+ 		args: {},
+ 		call: function(req) {
+From 400c79e6b652c41894af788259d90029e85127b9 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Thu, 24 Sep 2026 19:50:44 +0200
+Subject: [PATCH] hostapd: let a ubus subscriber answer BTM queries, and extend
+ beacon_req
+
+bss_transition_query_answer lets the subscriber that answers a BSS
+Transition Management Query itself, stop hostapd from sending a BTM
+Request of its own. The flag is cleared when the object loses its
+last subscriber.
+
+rrm_beacon_req takes channel_reports, written as AP Channel Report
+subelements, and element_list, written as a Request subelement where
+Reporting Detail is 1. A station rejects a request on channel 255 that
+carries no channel report (802.11-2024 11.10.9.1.1). Values that do not
+fit an octet, and a request longer than the Measurement Request element
+can carry, are refused.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 400c79e6b652c41894af788259d90029e85127b9)
+---
+ .../services/hostapd/src/src/ap/ubus.c        | 163 +++++++++++++++++-
+ .../services/hostapd/src/src/ap/ubus.h        |   1 +
+ 2 files changed, 163 insertions(+), 1 deletion(-)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ubus.c b/package/network/services/hostapd/src/src/ap/ubus.c
+index 116d0f3a..4dd876a3 100644
+--- a/package/network/services/hostapd/src/src/ap/ubus.c
++++ b/package/network/services/hostapd/src/src/ap/ubus.c
+@@ -456,6 +456,47 @@ hostapd_notify_response(struct ubus_context *ctx, struct ubus_object *obj,
+ 	return UBUS_STATUS_OK;
+ }
+ 
++enum {
++	BTQ_ANSWER,
++	__BTQ_MAX
++};
++
++static const struct blobmsg_policy btq_policy[__BTQ_MAX] = {
++	[BTQ_ANSWER] = { "answer", BLOBMSG_TYPE_BOOL },
++};
++
++/* A subscriber that answers a BSS Transition Management Query itself, as an
++ * EasyMesh agent does, needs hostapd to send no BTM Request of its own.
++ * notify_response gives it that as well, but it also makes every probe,
++ * authentication and association notification wait for the subscriber. */
++static int
++hostapd_bss_transition_query_answer(struct ubus_context *ctx,
++				    struct ubus_object *obj,
++				    struct ubus_request_data *req,
++				    const char *method, struct blob_attr *msg)
++{
++	struct blob_attr *tb[__BTQ_MAX];
++	struct hostapd_data *hapd = get_hapd_from_object(obj);
++
++	blobmsg_parse(btq_policy, __BTQ_MAX, tb, blob_data(msg), blob_len(msg));
++
++	if (!tb[BTQ_ANSWER])
++		return UBUS_STATUS_INVALID_ARGUMENT;
++
++	hapd->ubus.answer_bss_transition_query = blobmsg_get_bool(tb[BTQ_ANSWER]);
++
++	return UBUS_STATUS_OK;
++}
++
++/* The flag belongs to the subscriber that set it. Once none is left, hostapd
++ * answers a query again, and a later subscriber has to ask for it itself. */
++static void
++hostapd_bss_subscribe_cb(struct ubus_context *ctx, struct ubus_object *obj)
++{
++	if (!obj->has_subscribers)
++		get_hapd_from_object(obj)->ubus.answer_bss_transition_query = false;
++}
++
+ enum {
+ 	DEL_CLIENT_ADDR,
+ 	DEL_CLIENT_REASON,
+@@ -1223,6 +1264,7 @@ enum {
+ 	BEACON_REQ_SSID,
+ 	BEACON_REQ_REPORTING_DETAIL,
+ 	BEACON_REQ_CHANNEL_REPORTS,
++	BEACON_REQ_ELEMENT_LIST,
+ 	__BEACON_REQ_MAX,
+ };
+ 
+@@ -1236,8 +1278,82 @@ static const struct blobmsg_policy beacon_req_policy[__BEACON_REQ_MAX] = {
+ 	[BEACON_REQ_SSID] = { "ssid", BLOBMSG_TYPE_STRING },
+ 	[BEACON_REQ_REPORTING_DETAIL] = { "reporting_detail", BLOBMSG_TYPE_INT32 },
+ 	[BEACON_REQ_CHANNEL_REPORTS] = { "channel_reports", BLOBMSG_TYPE_ARRAY },
++	[BEACON_REQ_ELEMENT_LIST] = { "element_list", BLOBMSG_TYPE_ARRAY },
++};
++
++enum {
++	BEACON_REQ_CR_OP_CLASS,
++	BEACON_REQ_CR_CHANNELS,
++	__BEACON_REQ_CR_MAX,
+ };
+ 
++static const struct blobmsg_policy beacon_req_cr_policy[__BEACON_REQ_CR_MAX] = {
++	[BEACON_REQ_CR_OP_CLASS] = { "op_class", BLOBMSG_TYPE_UNSPEC },
++	[BEACON_REQ_CR_CHANNELS] = { "channels", BLOBMSG_TYPE_ARRAY },
++};
++
++static bool
++beacon_req_octet_valid(struct blob_attr *attr)
++{
++	switch (blobmsg_type(attr)) {
++	case BLOBMSG_TYPE_INT8:
++	case BLOBMSG_TYPE_INT16:
++	case BLOBMSG_TYPE_INT32:
++	case BLOBMSG_TYPE_INT64:
++		return blobmsg_cast_u64(attr) <= 255;
++	default:
++		return false;
++	}
++}
++
++/* One AP Channel Report subelement per operating class. A station answers a
++ * request on channel 255 by measuring the channels these name, and rejects it
++ * where neither the request nor the AP's Beacon carries a channel report
++ * (802.11-2024 11.10.9.1.1). With req NULL, only the length is returned, or
++ * -1 for a value that does not fit an octet. */
++static int
++hostapd_rrm_beacon_req_channel_reports(struct wpabuf *req,
++				       struct blob_attr *reports)
++{
++	struct blob_attr *tb[__BEACON_REQ_CR_MAX];
++	struct blob_attr *cur, *chan;
++	int rem, crem, n, len = 0;
++
++	blobmsg_for_each_attr(cur, reports, rem) {
++		if (blobmsg_type(cur) != BLOBMSG_TYPE_TABLE)
++			continue;
++
++		blobmsg_parse(beacon_req_cr_policy, __BEACON_REQ_CR_MAX, tb,
++			      blobmsg_data(cur), blobmsg_data_len(cur));
++		if (!tb[BEACON_REQ_CR_OP_CLASS] || !tb[BEACON_REQ_CR_CHANNELS])
++			continue;
++
++		if (!beacon_req_octet_valid(tb[BEACON_REQ_CR_OP_CLASS]))
++			return -1;
++
++		n = 0;
++		blobmsg_for_each_attr(chan, tb[BEACON_REQ_CR_CHANNELS], crem) {
++			if (!beacon_req_octet_valid(chan))
++				return -1;
++			n++;
++		}
++		if (!n || n > 254)
++			continue;
++
++		len += 3 + n;
++		if (!req)
++			continue;
++
++		wpabuf_put_u8(req, WLAN_BEACON_REQUEST_SUBELEM_AP_CHANNEL);
++		wpabuf_put_u8(req, 1 + n);
++		wpabuf_put_u8(req, blobmsg_cast_u64(tb[BEACON_REQ_CR_OP_CLASS]));
++		blobmsg_for_each_attr(chan, tb[BEACON_REQ_CR_CHANNELS], crem)
++			wpabuf_put_u8(req, blobmsg_cast_u64(chan));
++	}
++
++	return len;
++}
++
+ static int
+ hostapd_rrm_beacon_req(struct ubus_context *ctx, struct ubus_object *obj,
+ 		       struct ubus_request_data *ureq, const char *method,
+@@ -1245,13 +1361,15 @@ hostapd_rrm_beacon_req(struct ubus_context *ctx, struct ubus_object *obj,
+ {
+ 	struct hostapd_data *hapd = container_of(obj, struct hostapd_data, ubus.obj);
+ 	struct blob_attr *tb[__BEACON_REQ_MAX];
+-	struct blob_attr *cur;
++	struct blob_attr *cur, *elem;
+ 	struct wpabuf *req;
+ 	u8 bssid[ETH_ALEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+ 	u8 addr[ETH_ALEN];
+ 	int mode, rem, ret;
+ 	int buf_len = 13;
+ 	int reporting_detail = 255;
++	int n_elements = 0;
++	int cr_len;
+ 
+ 	blobmsg_parse(beacon_req_policy, __BEACON_REQ_MAX, tb, blob_data(msg), blob_len(msg));
+ 
+@@ -1262,6 +1380,14 @@ hostapd_rrm_beacon_req(struct ubus_context *ctx, struct ubus_object *obj,
+ 	if (tb[BEACON_REQ_SSID])
+ 		buf_len += blobmsg_data_len(tb[BEACON_REQ_SSID]) + 2 - 1;
+ 
++	if (tb[BEACON_REQ_CHANNEL_REPORTS]) {
++		cr_len = hostapd_rrm_beacon_req_channel_reports(NULL,
++					tb[BEACON_REQ_CHANNEL_REPORTS]);
++		if (cr_len < 0)
++			return UBUS_STATUS_INVALID_ARGUMENT;
++		buf_len += cr_len;
++	}
++
+ 	mode = blobmsg_get_u32(tb[BEACON_REQ_MODE]);
+ 	if (hwaddr_aton(blobmsg_data(tb[BEACON_REQ_ADDR]), addr))
+ 		return UBUS_STATUS_INVALID_ARGUMENT;
+@@ -1273,9 +1399,24 @@ hostapd_rrm_beacon_req(struct ubus_context *ctx, struct ubus_object *obj,
+ 	if (tb[BEACON_REQ_REPORTING_DETAIL])
+ 		reporting_detail = blobmsg_get_u32(tb[BEACON_REQ_REPORTING_DETAIL]);
+ 
++	/* 802.11-2024 9.4.2.19.7 names the elements of the Reported Frame Body
++	 * with a Request subelement only where Reporting Detail equals 1. */
++	if (reporting_detail == 1 && tb[BEACON_REQ_ELEMENT_LIST])
++		blobmsg_for_each_attr(elem, tb[BEACON_REQ_ELEMENT_LIST], rem)
++			n_elements++;
++	if (n_elements > 255)
++		return UBUS_STATUS_INVALID_ARGUMENT;
++	if (n_elements)
++		buf_len += 2 + n_elements;
++
+ 	if (reporting_detail >= 0 && reporting_detail < 3)
+ 		buf_len += 3;
+ 
++	/* hostapd_send_beacon_req() puts 3 + this length into the one octet
++	 * Length of the Measurement Request element. */
++	if (buf_len > 252)
++		return UBUS_STATUS_INVALID_ARGUMENT;
++
+ 	req = wpabuf_alloc(buf_len);
+ 	if (!req)
+ 		return UBUS_STATUS_UNKNOWN_ERROR;
+@@ -1312,6 +1453,17 @@ hostapd_rrm_beacon_req(struct ubus_context *ctx, struct ubus_object *obj,
+ 		wpabuf_put_u8(req, reporting_detail);
+ 	}
+ 
++	if (n_elements) {
++		wpabuf_put_u8(req, WLAN_BEACON_REQUEST_SUBELEM_REQUEST);
++		wpabuf_put_u8(req, n_elements);
++		blobmsg_for_each_attr(elem, tb[BEACON_REQ_ELEMENT_LIST], rem)
++			wpabuf_put_u8(req, blobmsg_cast_u64(elem));
++	}
++
++	if (tb[BEACON_REQ_CHANNEL_REPORTS])
++		hostapd_rrm_beacon_req_channel_reports(req,
++					tb[BEACON_REQ_CHANNEL_REPORTS]);
++
+ 	ret = hostapd_send_beacon_req(hapd, addr, 0, req);
+ 	wpabuf_free(req);
+ 	if (ret < 0)
+@@ -1801,6 +1953,7 @@ static const struct ubus_method bss_methods[] = {
+ #endif
+ 	UBUS_METHOD("set_vendor_elements", hostapd_vendor_elements, ve_policy),
+ 	UBUS_METHOD("notify_response", hostapd_notify_response, notify_policy),
++	UBUS_METHOD("bss_transition_query_answer", hostapd_bss_transition_query_answer, btq_policy),
+ 	UBUS_METHOD("bss_mgmt_enable", hostapd_bss_mgmt_enable, bss_mgmt_enable_policy),
+ 	UBUS_METHOD_NOARG("rrm_nr_get_own", hostapd_rrm_nr_get_own),
+ 	UBUS_METHOD_NOARG("rrm_nr_list", hostapd_rrm_nr_list),
+@@ -1926,6 +2079,7 @@ void hostapd_ubus_add_bss(struct hostapd_data *hapd)
+ 		obj->type = &bss_object_type;
+ 		obj->methods = bss_object_type.methods;
+ 		obj->n_methods = bss_object_type.n_methods;
++		obj->subscribe_cb = hostapd_bss_subscribe_cb;
+ 	}
+ 	ret = ubus_add_object(ctx, obj);
+ 	hostapd_ubus_ref_inc();
+@@ -2287,6 +2441,13 @@ int hostapd_ubus_notify_bss_transition_query(
+ 	blobmsg_add_u32(&b, "reason", reason);
+ 	hostapd_ubus_notify_bss_transition_add_candidate_list(candidate_list, candidate_list_len);
+ 
++	/* On an AP MLD the subscribed object may be another link's, and the
++	 * subscriber set the flag through that object. */
++	if (get_hapd_from_object(obj)->ubus.answer_bss_transition_query) {
++		ubus_notify(ctx, obj, "bss-transition-query", b.head, -1);
++		return 1;
++	}
++
+ 	if (!hapd->ubus.notify_response) {
+ 		ubus_notify(ctx, obj, "bss-transition-query", b.head, -1);
+ 		return 0;
+diff --git a/package/network/services/hostapd/src/src/ap/ubus.h b/package/network/services/hostapd/src/src/ap/ubus.h
+index 055a18c0..8e1b1449 100644
+--- a/package/network/services/hostapd/src/src/ap/ubus.h
++++ b/package/network/services/hostapd/src/src/ap/ubus.h
+@@ -38,6 +38,7 @@ struct hostapd_ubus_bss {
+ 	struct ubus_object obj;
+ 	struct avl_tree banned;
+ 	int notify_response;
++	bool answer_bss_transition_query;
+ };
+ 
+ void hostapd_ubus_add_iface(struct hostapd_iface *iface);

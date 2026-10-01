@@ -1,0 +1,358 @@
+From fcd9dbf534374fb6c249f77c5c64b055a91e5656 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Fri, 4 Sep 2026 11:20:40 +0200
+Subject: [PATCH] hostapd: let the ucode DPP hook send a GAS comeback request
+
+A GAS responder whose answer exceeds gas_frag_limit answers the initial
+request with a comeback delay and holds the payload for GAS Comeback
+Requests. hostapd does that for a DPP configuration response of any size
+above 1400 octets, which a configuration object for several BSSs
+exceeds, and an enrollee driven through this hook could not ask for it:
+tx_gas_req builds an initial request around a payload, and tx_action
+rebuilds whatever it is given as a DPP message, so neither carries the
+plain public action frame a comeback needs.
+
+dpp_send_gas_comeback_req exposes gas_build_comeback_req the same way
+dpp_send_gas_req exposes its counterpart, and the channel takes it as
+tx_gas_comeback_req.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit fcd9dbf534374fb6c249f77c5c64b055a91e5656)
+---
+ .../services/hostapd/files/wpa_supplicant.uc  |  8 ++++
+ .../hostapd/src/wpa_supplicant/ucode.c        | 47 +++++++++++++++++++
+ 2 files changed, 55 insertions(+)
+
+diff --git a/package/network/services/hostapd/files/wpa_supplicant.uc b/package/network/services/hostapd/files/wpa_supplicant.uc
+index e30138ed..7eba0426 100644
+--- a/package/network/services/hostapd/files/wpa_supplicant.uc
++++ b/package/network/services/hostapd/files/wpa_supplicant.uc
+@@ -465,6 +465,14 @@ function dpp_channel_handle_request(channel, req)
+ 			return libubus.STATUS_UNKNOWN_ERROR;
+ 		return 0;
+ 
++	case "tx_gas_comeback_req":
++		iface = dpp_find_iface(data.ifname);
++		if (!iface)
++			return libubus.STATUS_NOT_FOUND;
++		if (!iface.dpp_send_gas_comeback_req(data.dst, data.freq ?? 0, data.dialog_token ?? 0))
++			return libubus.STATUS_UNKNOWN_ERROR;
++		return 0;
++
+ 	case "dpp_bootstrap_gen":
+ 		iface = dpp_find_iface(data.ifname);
+ 		if (!iface)
+diff --git a/package/network/services/hostapd/src/wpa_supplicant/ucode.c b/package/network/services/hostapd/src/wpa_supplicant/ucode.c
+index b315c19a..00de26fb 100644
+--- a/package/network/services/hostapd/src/wpa_supplicant/ucode.c
++++ b/package/network/services/hostapd/src/wpa_supplicant/ucode.c
+@@ -483,6 +483,52 @@ uc_wpas_iface_dpp_send_gas_req(uc_vm_t *vm, size_t nargs)
+ 
+ 	return ucv_boolean_new(ret == 0);
+ }
++
++/*
++ * hostapd defers a DPP config response above gas_frag_limit to a GAS comeback
++ * exchange. dpp_send_action() cannot request it, as it rebuilds the frame as a
++ * DPP message instead of a plain public action frame.
++ */
++static uc_value_t *
++uc_wpas_iface_dpp_send_gas_comeback_req(uc_vm_t *vm, size_t nargs)
++{
++	struct wpa_supplicant *wpa_s = uc_fn_thisval("wpas.iface");
++	uc_value_t *dst_arg = uc_fn_arg(0);
++	uc_value_t *freq_arg = uc_fn_arg(1);
++	uc_value_t *token_arg = uc_fn_arg(2);
++	const char *dst_str;
++	u8 dst[ETH_ALEN];
++	unsigned int freq;
++	u8 dialog_token;
++	struct wpabuf *buf;
++	int ret;
++
++	if (!wpa_s || ucv_type(dst_arg) != UC_STRING)
++		return NULL;
++
++	dst_str = ucv_string_get(dst_arg);
++	if (hwaddr_aton(dst_str, dst))
++		return NULL;
++
++	freq = ucv_int64_get(freq_arg);
++	if (!freq)
++		freq = wpa_s->assoc_freq;
++
++	dialog_token = ucv_int64_get(token_arg);
++	if (!dialog_token)
++		return NULL;
++
++	buf = gas_build_comeback_req(dialog_token);
++	if (!buf)
++		return NULL;
++
++	ret = offchannel_send_action(wpa_s, freq, dst, wpa_s->own_addr,
++				     broadcast_ether_addr, wpabuf_head(buf),
++				     wpabuf_len(buf), 500, NULL, 0);
++	wpabuf_free(buf);
++
++	return ucv_boolean_new(ret == 0);
++}
+ #endif /* CONFIG_DPP */
+ 
+ static const char *obj_stringval(uc_value_t *obj, const char *name)
+@@ -755,6 +801,7 @@ int wpas_ucode_init(struct wpa_global *gl)
+ #ifdef CONFIG_DPP
+ 		{ "dpp_send_action", uc_wpas_iface_dpp_send_action },
+ 		{ "dpp_send_gas_req", uc_wpas_iface_dpp_send_gas_req },
++		{ "dpp_send_gas_comeback_req", uc_wpas_iface_dpp_send_gas_comeback_req },
+ #endif /* CONFIG_DPP */
+ 	};
+ 	uc_value_t *data, *proto;
+From 27b8aa25f85ba9f171dcff9645981b80d141073b Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Tue, 8 Sep 2026 19:55:54 +0200
+Subject: [PATCH] hostapd: answer a DPP frame on the link that holds the
+ channel
+
+The ucode DPP API sends from the BSS the caller names. An AP MLD holds
+one BSS per link, each with its own address and channel, and the BSS
+that receives a frame is not always the one that holds the channel the
+frame arrived on. The answer then leaves under the address of one link
+on the channel of another, and the peer does not acknowledge it.
+
+Send from the link whose channel the caller names. The GAS hook named no
+channel at all, so pass the one the request arrived on.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 27b8aa25f85ba9f171dcff9645981b80d141073b)
+---
+ .../hostapd/patches/601-ucode_support.patch   | 13 +++++----
+ .../services/hostapd/src/src/ap/ucode.c       | 29 +++++++++++++++++--
+ .../services/hostapd/src/src/ap/ucode.h       |  6 ++--
+ 3 files changed, 39 insertions(+), 9 deletions(-)
+
+diff --git a/package/network/services/hostapd/patches/601-ucode_support.patch b/package/network/services/hostapd/patches/601-ucode_support.patch
+index 84ee3b1b..27c595e7 100644
+--- a/package/network/services/hostapd/patches/601-ucode_support.patch
++++ b/package/network/services/hostapd/patches/601-ucode_support.patch
+@@ -1066,8 +1066,9 @@ as adding/removing interfaces.
+  struct wpabuf *
+  hostapd_dpp_gas_req_handler(struct hostapd_data *hapd, const u8 *sa,
+ -			    const u8 *query, size_t query_len,
++-			    const u8 *data, size_t data_len)
+ +			    u8 dialog_token, const u8 *query, size_t query_len,
+- 			    const u8 *data, size_t data_len)
+++			    const u8 *data, size_t data_len, unsigned int freq)
+  {
+  	struct dpp_authentication *auth = hapd->dpp_auth;
+  	struct wpabuf *resp;
+@@ -1075,7 +1076,7 @@ as adding/removing interfaces.
+  	wpa_printf(MSG_DEBUG, "DPP: GAS request from " MACSTR, MAC2STR(sa));
+ +
+ +	resp = hostapd_ucode_dpp_gas_req(hapd, sa, dialog_token,
+-+					 query, query_len);
+++					 query, query_len, freq);
+ +	if (resp)
+ +		return resp;
+ +
+@@ -1084,15 +1085,17 @@ as adding/removing interfaces.
+  	    !ether_addr_equal(sa, auth->peer_mac_addr)) {
+ --- a/src/ap/dpp_hostapd.h
+ +++ b/src/ap/dpp_hostapd.h
+-@@ -25,7 +25,7 @@ void hostapd_dpp_tx_status(struct hostap
++@@ -25,8 +25,8 @@ void hostapd_dpp_tx_status(struct hostap
+  			   const u8 *data, size_t data_len, int ok);
+  struct wpabuf *
+  hostapd_dpp_gas_req_handler(struct hostapd_data *hapd, const u8 *sa,
+ -			    const u8 *query, size_t query_len,
++-			    const u8 *data, size_t data_len);
+ +			    u8 dialog_token, const u8 *query, size_t query_len,
+- 			    const u8 *data, size_t data_len);
+++			    const u8 *data, size_t data_len, unsigned int freq);
+  void hostapd_dpp_gas_status_handler(struct hostapd_data *hapd, int ok);
+  int hostapd_dpp_configurator_add(struct hostapd_data *hapd, const char *cmd);
++ int hostapd_dpp_configurator_remove(struct hostapd_data *hapd, const char *id);
+ --- a/src/ap/gas_serv.c
+ +++ b/src/ap/gas_serv.c
+ @@ -1733,8 +1733,8 @@ static void gas_serv_rx_gas_initial_req(
+@@ -1102,7 +1105,7 @@ as adding/removing interfaces.
+ -		msg = hostapd_dpp_gas_req_handler(hapd, sa, pos, slen,
+ -						  data, len);
+ +		msg = hostapd_dpp_gas_req_handler(hapd, sa, dialog_token,
+-+						  pos, slen, data, len);
+++						  pos, slen, data, len, freq);
+  		if (!msg)
+  			return;
+  		gas_serv_req_dpp_processing(hapd, sa, dialog_token, prot, msg,
+diff --git a/package/network/services/hostapd/src/src/ap/ucode.c b/package/network/services/hostapd/src/src/ap/ucode.c
+index 85bf05bc..46b10e4e 100644
+--- a/package/network/services/hostapd/src/src/ap/ucode.c
++++ b/package/network/services/hostapd/src/src/ap/ucode.c
+@@ -987,6 +987,25 @@ uc_wpa_rkh_derive_key(uc_vm_t *vm, size_t nargs)
+ }
+ 
+ #ifdef CONFIG_DPP
++/* The BSS the caller reached carries the address of its own link. A frame that
++ * leaves under the address of one link on the channel of another is not
++ * acknowledged, so answer from the link that holds the channel.
++ */
++static struct hostapd_data *
++hostapd_dpp_freq_bss(struct hostapd_data *hapd, unsigned int freq)
++{
++	struct hostapd_data *link;
++
++	if (!hapd->conf->mld_ap)
++		return hapd;
++
++	for_each_mld_link(link, hapd)
++		if (link->iface->freq == (int)freq)
++			return link;
++
++	return hapd;
++}
++
+ static uc_value_t *
+ uc_hostapd_bss_dpp_send_action(uc_vm_t *vm, size_t nargs)
+ {
+@@ -1014,6 +1033,8 @@ uc_hostapd_bss_dpp_send_action(uc_vm_t *vm, size_t nargs)
+ 	freq = ucv_int64_get(freq_arg);
+ 	if (!freq)
+ 		freq = hapd->iface->freq;
++	else
++		hapd = hostapd_dpp_freq_bss(hapd, freq);
+ 
+ 	frame_b64 = ucv_string_get(frame_arg);
+ 	frame_data = base64_decode(frame_b64, os_strlen(frame_b64), &frame_len);
+@@ -1075,6 +1096,8 @@ uc_hostapd_bss_dpp_send_gas_resp(uc_vm_t *vm, size_t nargs)
+ 	freq = ucv_int64_get(freq_arg);
+ 	if (!freq)
+ 		freq = hapd->iface->freq;
++	else
++		hapd = hostapd_dpp_freq_bss(hapd, freq);
+ 
+ 	data_b64 = ucv_string_get(data_arg);
+ 	data = base64_decode(data_b64, os_strlen(data_b64), &data_len);
+@@ -1127,7 +1150,8 @@ int hostapd_ucode_dpp_rx_action(struct hostapd_data *hapd, const u8 *src,
+ 
+ struct wpabuf *hostapd_ucode_dpp_gas_req(struct hostapd_data *hapd,
+ 					 const u8 *sa, u8 dialog_token,
+-					 const u8 *query, size_t query_len)
++					 const u8 *query, size_t query_len,
++					 unsigned int freq)
+ {
+ 	uc_value_t *val;
+ 	char addr[18];
+@@ -1149,9 +1173,10 @@ struct wpabuf *hostapd_ucode_dpp_gas_req(struct hostapd_data *hapd,
+ 	uc_value_push(ucv_string_new(addr));
+ 	uc_value_push(ucv_int64_new(dialog_token));
+ 	uc_value_push(ucv_string_new(query_b64));
++	uc_value_push(ucv_int64_new(freq));
+ 	os_free(query_b64);
+ 
+-	val = wpa_ucode_call(4);
++	val = wpa_ucode_call(5);
+ 	if (ucv_type(val) == UC_STRING) {
+ 		const char *resp_b64 = ucv_string_get(val);
+ 		size_t resp_len;
+diff --git a/package/network/services/hostapd/src/src/ap/ucode.h b/package/network/services/hostapd/src/src/ap/ucode.h
+index 64dc8f1e..31cb3cb9 100644
+--- a/package/network/services/hostapd/src/src/ap/ucode.h
++++ b/package/network/services/hostapd/src/src/ap/ucode.h
+@@ -42,7 +42,8 @@ int hostapd_ucode_dpp_rx_action(struct hostapd_data *hapd, const u8 *src,
+ 				const u8 *data, size_t data_len);
+ struct wpabuf *hostapd_ucode_dpp_gas_req(struct hostapd_data *hapd,
+ 					 const u8 *sa, u8 dialog_token,
+-					 const u8 *query, size_t query_len);
++					 const u8 *query, size_t query_len,
++					 unsigned int freq);
+ #endif /* CONFIG_DPP */
+ 
+ #else
+@@ -90,7 +91,8 @@ static inline struct wpabuf *hostapd_ucode_dpp_gas_req(struct hostapd_data *hapd
+ 						       const u8 *sa,
+ 						       u8 dialog_token,
+ 						       const u8 *query,
+-						       size_t query_len)
++						       size_t query_len,
++						       unsigned int freq)
+ {
+ 	return NULL;
+ }
+From 24723ba31095f78751ba20be4c3850609a79603b Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Tue, 8 Sep 2026 19:56:12 +0200
+Subject: [PATCH] hostapd: name the DPP chirp listen frequency
+
+The ubus field was called scan_interval, which names a duration.
+wpa_supplicant reads it as "DPP_CHIRP listen=", a frequency in MHz. A
+caller that passed a duration made the driver reject the
+remain-on-channel request, and the enrollee listened on nothing between
+chirp rounds.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 24723ba31095f78751ba20be4c3850609a79603b)
+---
+ package/network/services/hostapd/files/wpa_supplicant.uc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/services/hostapd/files/wpa_supplicant.uc b/package/network/services/hostapd/files/wpa_supplicant.uc
+index 7eba0426..bdc3cbbb 100644
+--- a/package/network/services/hostapd/files/wpa_supplicant.uc
++++ b/package/network/services/hostapd/files/wpa_supplicant.uc
+@@ -501,8 +501,8 @@ function dpp_channel_handle_request(channel, req)
+ 		let chirp_cmd = "DPP_CHIRP own=" + data.id;
+ 		if (data.iter)
+ 			chirp_cmd += " iter=" + data.iter;
+-		if (data.scan_interval)
+-			chirp_cmd += " listen=" + data.scan_interval;
++		if (data.listen_freq)
++			chirp_cmd += " listen=" + data.listen_freq;
+ 		let chirp_result = iface.ctrl(chirp_cmd);
+ 		return (chirp_result == "OK") ? 0 : libubus.STATUS_UNKNOWN_ERROR;
+ 
+From 70927026ba645aa041815ba5c51a7f9201a0a356 Mon Sep 17 00:00:00 2001
+From: Andrea Pesaresi <andreapesaresi82@gmail.com>
+Date: Tue, 29 Sep 2026 23:39:16 +0200
+Subject: [PATCH] hostapd: fix build without 802.11be support
+
+hostapd_dpp_freq_bss() checks hapd->conf->mld_ap, but that field only
+exists when CONFIG_IEEE80211BE is enabled. Builds with DPP but without
+any Wi-Fi 7 driver selected (e.g. wpad-full-openssl for an MT7986
+based device) now fail with:
+
+  error: 'struct hostapd_bss_config' has no member named 'mld_ap'
+
+Wrap the MLD link lookup in #ifdef CONFIG_IEEE80211BE, like the rest
+of the MLD code in this file. Without 802.11be there are no MLD links,
+so just return the BSS we were given.
+
+Tested on GL.iNet GL-MT6000.
+
+Fixes: 27b8aa25f85b ("hostapd: answer a DPP frame on the link that holds the channel")
+Signed-off-by: Andrea Pesaresi <andreapesaresi82@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/25509
+[Crescentm: from OpenWrt PR #25509 head 70927026ba645aa041815ba5c51a7f9201a0a356,
+ unchanged]
+---
+ package/network/services/hostapd/src/src/ap/ucode.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ucode.c b/package/network/services/hostapd/src/src/ap/ucode.c
+index 46b10e4e..2e26757e 100644
+--- a/package/network/services/hostapd/src/src/ap/ucode.c
++++ b/package/network/services/hostapd/src/src/ap/ucode.c
+@@ -994,6 +994,7 @@ uc_wpa_rkh_derive_key(uc_vm_t *vm, size_t nargs)
+ static struct hostapd_data *
+ hostapd_dpp_freq_bss(struct hostapd_data *hapd, unsigned int freq)
+ {
++#ifdef CONFIG_IEEE80211BE
+ 	struct hostapd_data *link;
+ 
+ 	if (!hapd->conf->mld_ap)
+@@ -1002,6 +1003,7 @@ hostapd_dpp_freq_bss(struct hostapd_data *hapd, unsigned int freq)
+ 	for_each_mld_link(link, hapd)
+ 		if (link->iface->freq == (int)freq)
+ 			return link;
++#endif
+ 
+ 	return hapd;
+ }

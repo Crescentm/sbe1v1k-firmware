@@ -1,0 +1,57 @@
+From 895fd5881093d377fadd2606f94665487e609bb8 Mon Sep 17 00:00:00 2001
+From: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+Date: Tue, 25 Aug 2026 21:19:24 -0400
+Subject: [PATCH] Fix OOB read of HE Capabilities optional field in
+ get_max_nss_capability()
+
+get_max_nss_capability() casts elems->he_capabilities to struct
+ieee80211_he_capabilities * and, for bw == CHAN_WIDTH_160 or
+CHAN_WIDTH_80P80, reads hecaps->optional[0..7] (the extended NSS/BW
+support MCS maps) without checking elems->he_capabilities_len against
+the length required for those fields.
+
+The element parser (ieee802_11_parse_extension(), the
+WLAN_EID_EXT_HE_CAPABILITIES case) only enforces
+elen >= HE_CAPABILITIES_ELEM_MIN_LEN (21), which covers
+he_mac_capab_info(6) + he_phy_capab_info(11) +
+he_basic_supported_mcs_set(4) == 21 bytes; the optional[] trailer is
+zero bytes by default and is only present if the sender included it.
+
+bw is caller-supplied. wpas_parse_connection_info_link() in
+wpa_supplicant/events.c derives it from the AP's own VHT/HE Operation
+element in its (Re)Association Response frame via
+get_sta_operation_chan_width()/get_operation_channel_width(), then
+passes it straight into get_max_nss_capability(). A malicious or
+corrupted AP that advertises a 160 MHz (or 80+80 MHz) HE/VHT Operation
+element together with a minimum-length HE Capabilities element causes
+wpa_supplicant to read up to 4 (or 8) bytes past the end of the HE
+Capabilities element. If that element is at the end of the frame buffer,
+this might read up to 8 bytes beyond the end of that buffer.
+
+Only read the optional[] fields when he_capabilities_len is long enough
+for the requested bandwidth; otherwise fall through to the VHT/HT
+capability path as if no (usable) HE Capabilities element were present.
+
+Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+(cherry picked from commit 895fd5881093d377fadd2606f94665487e609bb8)
+---
+ src/common/ieee802_11_common.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index 8ad201ef7..a906e3f93 100644
+--- a/src/common/ieee802_11_common.c
++++ b/src/common/ieee802_11_common.c
+@@ -3838,7 +3838,11 @@ unsigned int get_max_nss_capability(struct ieee802_11_elems *elems,
+ 		(struct ieee80211_he_capabilities *) elems->he_capabilities;
+ 	le16 mcs_map;
+ 
+-	if (hecaps) {
++	if (hecaps &&
++	    (bw != CHAN_WIDTH_160 ||
++	     elems->he_capabilities_len >= HE_CAPABILITIES_ELEM_MIN_LEN + 4) &&
++	    (bw != CHAN_WIDTH_80P80 ||
++	     elems->he_capabilities_len >= HE_CAPABILITIES_ELEM_MIN_LEN + 8)) {
+ 		unsigned int max_nss_he;
+ 		const u8 *optional = hecaps->optional;
+ 

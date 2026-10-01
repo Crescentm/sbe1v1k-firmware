@@ -1,0 +1,70 @@
+From 6cf41afd5bb7ce187f415146750a60d18d90f1c9 Mon Sep 17 00:00:00 2001
+From: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+Date: Tue, 25 Aug 2026 21:32:39 -0400
+Subject: [PATCH] AP: Fix OOB read of STA's HE-MCS map in check_valid_he_mcs()
+
+check_valid_he_mcs() reads sta_mcs_set[i * 4] for i in [0, mcs_count),
+where sta_mcs_set points into the "Supported HE-MCS And NSS Set" field
+of the STA's HE Capabilities element and mcs_count (1, 2, or 3) is
+derived entirely from the AP's own configured he_oper_chwidth. Nothing
+bounds i against the actual length of the STA-supplied element: a STA
+that sends a minimum-length (21-byte, HE_CAPABILITIES_ELEM_MIN_LEN) HE
+Capabilities element while the AP is configured for 160 MHz (or 80+80
+MHz) HE operation causes a read past the end of that element's buffer.
+
+copy_sta_he_capab() does call ieee80211_invalid_he_cap_size(), which
+validates he_capab_len, but that check is not sufficient on its own: it
+derives the length it requires from the PHY Capabilities Info bits the
+STA itself declared in the same element, not from the AP's
+he_oper_chwidth. A STA can simply not set the corresponding
+channel-width bits and still pass that check at the element's minimum
+length, while check_valid_he_mcs() keeps reading based on the AP's
+independently configured operating width.
+
+Pass he_capab_len into check_valid_he_mcs() and stop the loop before
+reading an MCS map field the element is too short to actually contain.
+
+Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+(cherry picked from commit 6cf41afd5bb7ce187f415146750a60d18d90f1c9)
+---
+ src/ap/ieee802_11_he.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/ap/ieee802_11_he.c b/src/ap/ieee802_11_he.c
+index bc0b50c6e..f09f51399 100644
+--- a/src/ap/ieee802_11_he.c
++++ b/src/ap/ieee802_11_he.c
+@@ -411,6 +411,7 @@ void hostapd_get_he_capab(struct hostapd_data *hapd,
+ 
+ 
+ static int check_valid_he_mcs(struct hostapd_data *hapd, const u8 *sta_he_capab,
++			      size_t sta_he_capab_len,
+ 			      enum ieee80211_op_mode opmode)
+ {
+ 	u16 sta_rx_mcs_set, ap_tx_mcs_set;
+@@ -446,6 +447,16 @@ static int check_valid_he_mcs(struct hostapd_data *hapd, const u8 *sta_he_capab,
+ 	for (i = 0; i < mcs_count; i++) {
+ 		int j;
+ 
++		/* mcs_count (and hence the highest i reached here) is
++		 * derived from the AP's own configured operating channel
++		 * width, not from anything the STA guarantees about the
++		 * length of its HE Capabilities element. Stop before
++		 * reading an MCS map field the STA's element is too short
++		 * to actually contain. */
++		if ((size_t) (IEEE80211_HE_CAPAB_MIN_LEN + (i + 1) * 4) >
++		    sta_he_capab_len)
++			break;
++
+ 		/* AP Tx MCS map vs. STA Rx MCS map */
+ 		sta_rx_mcs_set = WPA_GET_LE16(&sta_mcs_set[i * 4]);
+ 		ap_tx_mcs_set = WPA_GET_LE16((const u8 *)
+@@ -475,7 +486,7 @@ u16 copy_sta_he_capab(struct hostapd_data *hapd, struct sta_info *sta,
+ {
+ 	if (!he_capab || !(sta->flags & WLAN_STA_WMM) ||
+ 	    !hostapd_is_he_enabled(hapd) ||
+-	    !check_valid_he_mcs(hapd, he_capab, opmode) ||
++	    !check_valid_he_mcs(hapd, he_capab, he_capab_len, opmode) ||
+ 	    ieee80211_invalid_he_cap_size(he_capab, he_capab_len) ||
+ 	    he_capab_len > sizeof(struct ieee80211_he_capabilities)) {
+ 		sta->flags &= ~WLAN_STA_HE;

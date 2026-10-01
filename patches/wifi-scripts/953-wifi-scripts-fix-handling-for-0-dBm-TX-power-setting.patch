@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Shiji Yang <yangshiji66@outlook.com>
+Date: Tue, 29 Sep 2026 20:36:10 +0800
+Subject: [PATCH] wifi-scripts: fix handling for 0 dBm TX power setting
+
+When txpower is set to 0 dBm, the current script will set it to auto.
+
+Signed-off-by: Shiji Yang <yangshiji66@outlook.com>
+Link: https://github.com/openwrt/openwrt/pull/25479
+[Crescentm: from OpenWrt PR #25479 head 9f2d64a21928dd741f24229c9be6ea5881704c28,
+ without its Makefile PKG_RELEASE bump]
+---
+ files-ucode/lib/netifd/wireless/mac80211.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/files-ucode/lib/netifd/wireless/mac80211.sh b/files-ucode/lib/netifd/wireless/mac80211.sh
+index ae62602e..7eb22845 100755
+--- a/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -102,7 +102,7 @@ function setup_phy(phy, config, data) {
+ 		rxantenna: config.rxantenna
+ 	});
+ 
+-	if (config.txpower)
++	if (config.txpower != null)
+ 		config.txpower = 'fixed ' + config.txpower + '00';
+ 	else
+ 		config.txpower = 'auto';

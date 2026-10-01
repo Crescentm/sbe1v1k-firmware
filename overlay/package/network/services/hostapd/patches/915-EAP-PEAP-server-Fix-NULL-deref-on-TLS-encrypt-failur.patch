@@ -1,0 +1,52 @@
+From 0da59aadce3356d9d043cb92d308a2ce818fd140 Mon Sep 17 00:00:00 2001
+From: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+Date: Thu, 10 Sep 2026 15:49:42 -0400
+Subject: [PATCH] EAP-PEAP server: Fix NULL deref on TLS encrypt failure path
+
+eap_server_tls_encrypt() returns NULL when the underlying TLS library
+fails to encrypt the Phase 2 termination message
+(src/eap_server/eap_server_tls_common.c:508-521):
+
+    buf = tls_connection_encrypt(sm->cfg->ssl_ctx, data->conn, plain);
+    if (buf == NULL) {
+            wpa_printf(MSG_INFO, "SSL: Failed to encrypt Phase 2 data");
+            return NULL;
+    }
+
+eap_peap_build_phase2_term() stores this return value in encr_req and,
+on the non-resumed/non-TLS-1.3 path, correctly returns it to the caller
+(which does check for NULL). On the TLS 1.3 resumed path, though, it
+falls through unconditionally to:
+
+    if (wpabuf_resize(&data->ssl.tls_out, wpabuf_len(encr_req)) < 0) {
+
+wpabuf_len() (src/utils/wpabuf.h) is a `static inline` that
+unconditionally dereferences its argument (`return buf->used;`), with
+no NULL guard. A TLS encryption failure while building an EAP Success/
+Failure termination message during a resumed TLS 1.3 EAP-PEAP session
+crashes the process.
+
+Return NULL immediately when eap_server_tls_encrypt() fails, before
+reaching either downstream path -- matching the NULL-safe handling the
+non-resumed path already relies on its caller to do.
+
+Fixes: 0dee287c8 ("EAP server: Extend EAP-TLS Commitment Message use to PEAP and EAP-TTLS")
+Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+(cherry picked from commit 0da59aadce3356d9d043cb92d308a2ce818fd140)
+---
+ src/eap_server/eap_server_peap.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/eap_server/eap_server_peap.c b/src/eap_server/eap_server_peap.c
+index 07f4c9151..66882c3e2 100644
+--- a/src/eap_server/eap_server_peap.c
++++ b/src/eap_server/eap_server_peap.c
+@@ -515,6 +515,8 @@ static struct wpabuf * eap_peap_build_phase2_term(struct eap_sm *sm,
+ 	wpabuf_set(&msgbuf, hdr, req_len);
+ 	encr_req = eap_server_tls_encrypt(sm, &data->ssl, &msgbuf);
+ 	os_free(hdr);
++	if (!encr_req)
++		return NULL;
+ 
+ 	if (!data->ssl.tls_v13 ||
+ 	    !tls_connection_resumed(sm->cfg->ssl_ctx, data->ssl.conn)) {

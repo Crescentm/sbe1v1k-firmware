@@ -1,0 +1,54 @@
+From dd81452ef6fc812ac3b74a8a2870e2e56318d35b Mon Sep 17 00:00:00 2001
+From: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+Date: Thu, 13 Aug 2026 12:41:15 +0300
+Subject: [PATCH] WNM: Fix subelement length check WNM sleep mode exit
+
+The length checks for the WNM Sleep Mode IGTK/BIGTK subelements did not
+account for the possibility of using BIP-GMAC-256 or BIP-CMAC-256 which
+have 32 octet keys. This could result in wpa_supplicant reading beyond
+the end of the buffer when processing a malformed protected frame from
+the AP.
+
+Discovered and reported by BreachX Zero Day Labs, using Typhon AI Mil
+v2. Contributing Researcher: Vivek Parikh.
+
+Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+(cherry picked from commit dd81452ef6fc812ac3b74a8a2870e2e56318d35b)
+---
+ wpa_supplicant/wnm_sta.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/wpa_supplicant/wnm_sta.c b/wpa_supplicant/wnm_sta.c
+index 7e3b355c9..1c8b93169 100644
+--- a/wpa_supplicant/wnm_sta.c
++++ b/wpa_supplicant/wnm_sta.c
+@@ -269,7 +269,8 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+ 			}
+ 			gtk_len = *(ptr + 4);
+ 			if (ptr[1] < 11 + gtk_len ||
+-			    gtk_len < 5 || gtk_len > 32) {
++			    gtk_len !=
++			    wpa_cipher_key_len(wpa_s->group_cipher)) {
+ 				wpa_printf(MSG_DEBUG, "WNM: Invalid GTK "
+ 					   "subelem");
+ 				break;
+@@ -280,7 +281,8 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+ 				ptr);
+ 			ptr += 13 + gtk_len;
+ 		} else if (*ptr == WNM_SLEEP_SUBELEM_IGTK) {
+-			if (ptr[1] < 2 + 6 + WPA_IGTK_LEN) {
++			if (ptr[1] < 2 + 6 +
++			    wpa_cipher_key_len(wpa_s->mgmt_group_cipher)) {
+ 				wpa_printf(MSG_DEBUG, "WNM: Too short IGTK "
+ 					   "subelem");
+ 				break;
+@@ -289,7 +291,8 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+ 						 WNM_SLEEP_SUBELEM_IGTK, ptr);
+ 			ptr += 10 + WPA_IGTK_LEN;
+ 		} else if (*ptr == WNM_SLEEP_SUBELEM_BIGTK) {
+-			if (ptr[1] < 2 + 6 + WPA_BIGTK_LEN) {
++			if (ptr[1] < 2 + 6 +
++			    wpa_cipher_key_len(wpa_s->mgmt_group_cipher)) {
+ 				wpa_printf(MSG_DEBUG,
+ 					   "WNM: Too short BIGTK subelem");
+ 				break;

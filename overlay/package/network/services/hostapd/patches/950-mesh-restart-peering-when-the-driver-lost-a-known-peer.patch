@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 12:00:00 +0800
+Subject: [PATCH] mesh: restart peering when the driver lost a known peer
+
+mac80211 sends NL80211_CMD_NEW_PEER_CANDIDATE for every matching beacon
+from a mesh neighbour for which it has no station entry. wpa_supplicant
+logs "new peer notification" and calls mesh_mpm_add_peer(), which returns
+early without a message if a hostapd sta_info entry for the address
+already exists.
+
+Station removals done by the kernel are not reported for mesh interfaces
+(nl80211_del_station_event() only handles AP SME and IBSS), so the two
+can get out of sync: the kernel has no station, wpa_supplicant still has
+one. The kernel then reports the peer again for every beacon, which only
+shows up as a stream of "new peer notification" messages, and the peer is
+not re-added until ap_handle_timer() notices the missing driver entry
+after mesh_max_inactivity (300 s by default).
+
+When a candidate is reported for a known peer, ask the driver whether it
+still has the station. If it does not, log it, free the stale entry and
+add the peer again.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+ wpa_supplicant/mesh_mpm.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/wpa_supplicant/mesh_mpm.c b/wpa_supplicant/mesh_mpm.c
+index 66684c9..6299315 100644
+--- a/wpa_supplicant/mesh_mpm.c
++++ b/wpa_supplicant/mesh_mpm.c
+@@ -17,6 +17,7 @@
+ #include "ap/sta_info.h"
+ #include "ap/ieee802_11.h"
+ #include "ap/beacon.h"
++#include "ap/ap_drv_ops.h"
+ #include "ap/wpa_auth.h"
+ #include "wpa_supplicant_i.h"
+ #include "driver_i.h"
+@@ -848,6 +849,31 @@ void wpa_mesh_new_mesh_peer(struct wpa_supplicant *wpa_s, const u8 *addr,
+ 	struct sta_info *sta;
+ 	struct wpa_ssid *ssid = wpa_s->current_ssid;
+ 
++	/*
++	 * The driver reports a new peer candidate only while it has no
++	 * station entry for the peer. If we still have one, the driver has
++	 * dropped the station without telling us (station removal events are
++	 * not reported for mesh interfaces). mesh_mpm_add_peer() would then
++	 * ignore the peer and the driver would report it again for every
++	 * beacon until the inactivity timer cleans up. Drop the stale entry
++	 * so that peering can start over.
++	 */
++	sta = ap_get_sta(data, addr);
++	if (sta) {
++		if (hostapd_drv_get_inact_sec(data, addr) != -ENOENT) {
++			wpa_msg(wpa_s, MSG_DEBUG,
++				"mesh: Peer " MACSTR " is already known",
++				MAC2STR(addr));
++			return;
++		}
++
++		wpa_msg(wpa_s, MSG_INFO,
++			"mesh: Peer " MACSTR
++			" lost its driver entry - restart peering",
++			MAC2STR(addr));
++		ap_free_sta(data, sta);
++	}
++
+ 	sta = mesh_mpm_add_peer(wpa_s, addr, elems);
+ 	if (!sta)
+ 		return;

@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 15:09:55 +0800
+Subject: [PATCH] hostapd: bump PKG_RELEASE
+
+The tree patches 0012-0016 and the hostapd patches in the overlay
+(overlay/package/network/services/hostapd/patches) change what hostapd
+builds, so the packages from this feed must not carry the same version
+as ImmortalWrt's own build.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+ package/network/services/hostapd/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/package/network/services/hostapd/Makefile b/package/network/services/hostapd/Makefile
+index 8a87d557..1650089c 100644
+--- a/package/network/services/hostapd/Makefile
++++ b/package/network/services/hostapd/Makefile
+@@ -5,7 +5,7 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=hostapd
+-PKG_RELEASE:=3
++PKG_RELEASE:=4
+ 
+ PKG_SOURCE_URL:=https://w1.fi/hostap.git
+ PKG_SOURCE_PROTO:=git

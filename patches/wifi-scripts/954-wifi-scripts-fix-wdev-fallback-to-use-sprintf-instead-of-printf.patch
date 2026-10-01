@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alexander Astrovsky <astrouski@google.com>
+Date: Sun, 9 Aug 2026 09:25:27 +0000
+Subject: [PATCH] wifi-scripts: fix wdev fallback to use sprintf instead of
+ printf
+
+Previously, when printf was used, it didn't work because printf
+returns the number of bytes written instead of the real content.
+There was an attempt to fix that issue by using a loop, which
+introduced several new bugs. It prevented orphan interfaces from
+being correctly cleaned up since ubus wouldn't be called. Another
+bug was that if we had several interfaces on the same radio, only
+the last one would be applied because the loop called them
+sequentially.
+
+Update the command to use sprintf so it provides the correct
+dictionary.
+
+Signed-off-by: Alexander Astrovsky <astrouski@google.com>
+Link: https://github.com/openwrt/openwrt/pull/24621
+[Crescentm: from OpenWrt PR #24621 head 2589982754991c4af392e2b4e414550cd86bcca1, commit e22c137bee7f685b1b1558b1a43989a34e2181d1]
+---
+ files-ucode/lib/netifd/wireless/mac80211.sh | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/files-ucode/lib/netifd/wireless/mac80211.sh b/files-ucode/lib/netifd/wireless/mac80211.sh
+index 7eb22845..9c2e9261 100755
+--- a/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -313,15 +313,7 @@ function setup() {
+ 		wdev_data[v.config.ifname] = config;
+ 	}
+ 
+-	for (let ifname in active_ifnames) {
+-		if (!wdev_data[ifname])
+-			continue;
+-
+-		let if_config = {
+-			[ifname]: wdev_data[ifname]
+-		};
+-		system(`ucode /usr/share/hostap/wdev.uc ${data.phy}${data.phy_suffix} set_config '${if_config}'`);
+-	}
++	system([ "ucode", "/usr/share/hostap/wdev.uc", data.phy + data.phy_suffix, "set_config", sprintf("%J", wdev_data), ...active_ifnames ]);
+ 
+ 	if (fs.access('/usr/sbin/wpa_supplicant', 'x'))
+ 		supplicant.setup(supplicant_data, data);

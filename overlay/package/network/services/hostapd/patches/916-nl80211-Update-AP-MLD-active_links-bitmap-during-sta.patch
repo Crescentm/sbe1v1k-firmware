@@ -1,0 +1,128 @@
+From 4a9a301a2d6528ce1085f1b170101b08b86076b6 Mon Sep 17 00:00:00 2001
+From: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
+Date: Thu, 10 Sep 2026 12:02:56 +0530
+Subject: [PATCH] nl80211: Update AP MLD active_links bitmap during start_ap
+
+active_links bitmap in struct i802_bss was added to avoid dangling
+pointer issues when nl80211_stop_ap() is followed by any remove
+interface sequence, but this missed the update to active_links in the
+start_ap handler and updated it only in the hostapd_setup_bss()
+sequence. Because of this, though the link is active, the active_links
+bitmap was not reflecting the correct state.
+
+Fix this by handling the NL80211_CMD_START_AP for the bss to update the
+active_links bitmap by refactoring nl80211_update_active_links() to have
+'link_stopped' flag argument to identify between stop and start
+sequence. If link_stopped flag is set, remove the particular link from
+the active_links and add the link_id to active_links when start_ap is
+received.
+
+Fixes: 2fe31050c248 ("nl80211: Use active_links to notify start/stop state of links")
+Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
+(cherry picked from commit 4a9a301a2d6528ce1085f1b170101b08b86076b6)
+---
+ src/drivers/driver_nl80211.c       | 15 +++++++++++----
+ src/drivers/driver_nl80211.h       |  3 ++-
+ src/drivers/driver_nl80211_event.c | 27 ++++++++++++++++++++++++++-
+ 3 files changed, 39 insertions(+), 6 deletions(-)
+
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 180eb997a..db3e21556 100644
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -10477,10 +10477,17 @@ fail:
+ }
+ 
+ 
+-void nl80211_update_active_links(struct i802_bss *bss, int link_id)
++void nl80211_update_active_links(struct i802_bss *bss, int link_id,
++				 bool set_active_links)
+ {
+-	wpa_printf(MSG_DEBUG, "nl80211: Update link (ifindex=%d link_id=%u)",
+-		   bss->ifindex, link_id);
++	wpa_printf(MSG_DEBUG, "nl80211: Update link (ifindex=%d link_id=%u %s)",
++		   bss->ifindex, link_id,
++		   set_active_links ? "START_AP" : "STOP_AP");
++
++	if (set_active_links) {
++		bss->active_links |= BIT(link_id);
++		return;
++	}
+ 
+ 	if (!(bss->active_links & BIT(link_id))) {
+ 		wpa_printf(MSG_DEBUG,
+@@ -10521,7 +10528,7 @@ int nl80211_remove_link(struct i802_bss *bss, int link_id)
+ 
+ 	eloop_cancel_timeout(wpa_driver_nl80211_scan_timeout, drv, bss->ctx);
+ 	/* Clear the active links and set the flink */
+-	nl80211_update_active_links(bss, link_id);
++	nl80211_update_active_links(bss, link_id, false);
+ 	bss->valid_links &= ~BIT(link_id);
+ 
+ 	if (bss->scan_link == link)
+diff --git a/src/drivers/driver_nl80211.h b/src/drivers/driver_nl80211.h
+index cb982e49c..0989bab08 100644
+--- a/src/drivers/driver_nl80211.h
++++ b/src/drivers/driver_nl80211.h
+@@ -401,7 +401,8 @@ void nl80211_restore_ap_mode(struct i802_bss *bss);
+ struct i802_link * nl80211_get_link(struct i802_bss *bss, s8 link_id);
+ u8 nl80211_get_link_id_from_link(struct i802_bss *bss, struct i802_link *link);
+ int nl80211_remove_link(struct i802_bss *bss, int link_id);
+-void nl80211_update_active_links(struct i802_bss *bss, int link_id);
++void nl80211_update_active_links(struct i802_bss *bss, int link_id,
++				 bool set_active_links);
+ int nl80211_has_ifidx(struct wpa_driver_nl80211_data *drv, int ifidx,
+ 		      int ifidx_reason);
+ 
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index 494dd50a2..aa45e9f6a 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -2671,7 +2671,7 @@ static void nl80211_stop_ap(struct i802_bss *bss, struct nlattr **tb)
+ 		ctx = mld_link->ctx;
+ 
+ 		/* Bring down the active link */
+-		nl80211_update_active_links(bss, link_id);
++		nl80211_update_active_links(bss, link_id, false);
+ 	}
+ 
+ 	wpa_supplicant_event(ctx, EVENT_INTERFACE_UNAVAILABLE, NULL);
+@@ -4826,6 +4826,28 @@ process_incumbt_intf_event:
+ }
+ 
+ 
++static void nl80211_start_ap(struct i802_bss *bss, struct nlattr **tb)
++{
++	int link_id;
++
++	if (!tb[NL80211_ATTR_MLO_LINK_ID])
++		return;
++
++	link_id = nla_get_u8(tb[NL80211_ATTR_MLO_LINK_ID]);
++	if (!nl80211_link_valid(bss->valid_links, link_id)) {
++		wpa_printf(MSG_DEBUG,
++			   "nl80211: Ignoring START_AP event for invalid link ID %d (valid: 0x%04x)",
++			   link_id, bss->valid_links);
++		return;
++	}
++
++	wpa_printf(MSG_DEBUG, "nl80211: START_AP event on link %d", link_id);
++
++	/* Update the active link */
++	nl80211_update_active_links(bss, link_id, true);
++}
++
++
+ static void do_process_drv_event(struct i802_bss *bss, int cmd,
+ 				 struct nlattr **tb)
+ {
+@@ -5133,6 +5155,9 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
+ 		nl80211_peer_measurement_complete_event(bss, tb);
+ 		break;
+ #endif /* CONFIG_PR */
++	case NL80211_CMD_START_AP:
++		nl80211_start_ap(bss, tb);
++		break;
+ 	default:
+ 		wpa_dbg(drv->ctx, MSG_DEBUG, "nl80211: Ignored unknown event "
+ 			"(cmd=%d)", cmd);

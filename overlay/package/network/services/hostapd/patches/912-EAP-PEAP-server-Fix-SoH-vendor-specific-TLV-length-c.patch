@@ -1,0 +1,47 @@
+From 4b5965e6196810a3813a6d2092ac1bf1c9ebda50 Mon Sep 17 00:00:00 2001
+From: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+Date: Tue, 25 Aug 2026 21:28:42 -0400
+Subject: [PATCH] EAP-PEAP server: Fix SoH vendor-specific TLV length check to
+ require 8 bytes
+
+eap_peap_process_phase2_soh() checks that a vendor-specific
+Statement-of-Health TLV is at least 4 bytes long before reading the
+4-byte vendor_id at that offset:
+
+    if (tlv_len < 4) { ... reject ... }
+    vendor_id = WPA_GET_BE32(pos);
+
+but the following lines unconditionally read a second, inner 4-byte TLV
+header starting 4 bytes further in:
+
+    vpos = pos + 4;
+    mandatory = !!(vpos[0] & 0x80);
+    tlv_type = (vpos[0] & 0x3f) << 8 | vpos[1];
+    vtlv_len = (vpos[2] << 8) | vpos[3];
+
+so the minimum required length is 8 bytes, not 4. With tlv_len == 4 and
+this TLV positioned at the end of the received SoH buffer, the vpos[]
+reads run past the end of the buffer -- a heap out-of-bounds read of
+attacker-controlled (EAP peer supplied) data.
+
+Require tlv_len >= 8 before reading the inner TLV header.
+
+Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
+(cherry picked from commit 4b5965e6196810a3813a6d2092ac1bf1c9ebda50)
+---
+ src/eap_server/eap_server_peap.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/eap_server/eap_server_peap.c b/src/eap_server/eap_server_peap.c
+index 998d0e8ae..07f4c9151 100644
+--- a/src/eap_server/eap_server_peap.c
++++ b/src/eap_server/eap_server_peap.c
+@@ -861,7 +861,7 @@ static void eap_peap_process_phase2_soh(struct eap_sm *sm,
+ 		}
+ 		switch (tlv_type) {
+ 		case EAP_TLV_VENDOR_SPECIFIC_TLV:
+-			if (tlv_len < 4) {
++			if (tlv_len < 8) {
+ 				wpa_printf(MSG_DEBUG, "EAP-PEAP: Too short "
+ 					   "vendor specific TLV (len=%d)",
+ 					   (int) tlv_len);

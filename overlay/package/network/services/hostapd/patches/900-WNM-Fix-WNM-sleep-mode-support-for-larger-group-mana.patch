@@ -1,0 +1,36 @@
+From 1faad63cda4b6fcdd497065c753c0a29183bd03e Mon Sep 17 00:00:00 2001
+From: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+Date: Thu, 13 Aug 2026 12:05:05 +0300
+Subject: [PATCH] WNM: Fix WNM sleep mode support for larger group management
+ keys
+
+The maximum lengths for the WNM Sleep Mode IGTK/BIGTK subelements did
+not account for the possibility of using BIP-GMAC-256 or BIP-CMAC-256
+which have 32 octet keys. This could result in hostapd writing beyond
+the end of the allocated buffer and terminating the process if WNM sleep
+mode is enabled in the configuration with the longer group keys.
+
+Discovered and reported by BreachX Zero Day Labs, using Typhon AI Mil
+v2. Contributing Researcher: Vivek Parikh.
+
+Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+(cherry picked from commit 1faad63cda4b6fcdd497065c753c0a29183bd03e)
+---
+ src/ap/wnm_ap.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/ap/wnm_ap.c b/src/ap/wnm_ap.c
+index 9cf29547e..03768c496 100644
+--- a/src/ap/wnm_ap.c
++++ b/src/ap/wnm_ap.c
+@@ -146,8 +146,8 @@ static int ieee802_11_send_wnmsleep_resp(struct hostapd_data *hapd,
+ #endif /* CONFIG_OCV */
+ 
+ #define MAX_GTK_SUBELEM_LEN 45
+-#define MAX_IGTK_SUBELEM_LEN 26
+-#define MAX_BIGTK_SUBELEM_LEN 26
++#define MAX_IGTK_SUBELEM_LEN 10 + WPA_IGTK_MAX_LEN
++#define MAX_BIGTK_SUBELEM_LEN 10 + WPA_BIGTK_MAX_LEN
+ 	mgmt = os_zalloc(sizeof(*mgmt) + wnmsleep_ie_len + wnmtfs_ie_len +
+ 			 MAX_GTK_SUBELEM_LEN + MAX_IGTK_SUBELEM_LEN +
+ 			 MAX_BIGTK_SUBELEM_LEN +

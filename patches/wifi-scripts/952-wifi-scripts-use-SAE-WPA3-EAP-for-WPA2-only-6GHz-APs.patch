@@ -1,38 +1,55 @@
-Subject: [PATCH] wifi-scripts: use SAE / WPA3-EAP for WPA2-only 6 GHz APs
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Michael Pfeifroth <micpf@westermo.com>
+Date: Mon, 22 Jun 2026 14:13:37 +0200
+Subject: [PATCH] wifi-scripts: enforce WPA3 for all encryption types on 6 GHz
 
-WPA-PSK and WPA2-EAP AKMs are not allowed on 6 GHz and require PMF; a 6 GHz
-interface configured with psk2 (e.g. copied from the 2.4/5 GHz SSIDs)
-makes hostapd refuse the BSS. The ucode scripts already upgrade
-psk-sae -> sae and eap-eap2 -> eap2 on 6 GHz; do the same for plain
-psk -> sae and eap -> eap2 (WPA2 only), which in turn sets
-ieee80211w=2 (PMF required).
+The existing 6 GHz auth_type override only covers mixed modes
+(psk-sae, eap-eap2), upgrading them to their WPA3 equivalents.
+However, if a user configures pure WPA2 (psk or eap) on a 6 GHz
+radio, the configuration falls through unchanged and hostapd rejects
+it with a confusing error about invalid AKM suite.
 
-Code equivalent of the SBE1V1K_immortalwrt_NSS first-boot uci-defaults
-script 99-sbe1v1k-6ghz-pmf (commit 534e227e70), applied at runtime so it
-also covers later config changes.
+Extend the override to also cover pure WPA2 modes:
+  - psk / psk-sae -> sae
+  - eap / eap-eap2 -> eap2
+
+This matches the existing silent-upgrade pattern and ensures the
+radio comes up regardless of which legacy encryption the user
+selected.
+
+Signed-off-by: Michael Pfeifroth <micpf@westermo.com>
+Link: https://github.com/openwrt/openwrt/pull/23914
+[Crescentm: from OpenWrt PR #23914 head eb7da521371a605960575e6cdfcbdb81f7a4c4e9,
+ without its Makefile PKG_RELEASE bump. Also set wpa=2 on 6 GHz: the
+ encryption values psk, psk+*, psk-mixed, wpa and wpa-mixed leave wpa at
+ 1 or 3, hostapd then refuses the BSS ("Pre-RSNA security methods are
+ not allowed in 6 GHz"), and iface_mfp() sets up no PMF for wpa < 2.
+ This replaces the earlier local 952, which did the same upgrade with
+ its own code; its file name is kept.]
 ---
-  files-ucode/usr/share/ucode/wifi/ap.uc | 13 +++++++++++++
-  1 file changed, 13 insertions(+)
+ files-ucode/usr/share/ucode/wifi/ap.uc | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
 
+diff --git a/files-ucode/usr/share/ucode/wifi/ap.uc b/files-ucode/usr/share/ucode/wifi/ap.uc
+index 51e2fe1d..d1ba93fb 100644
 --- a/files-ucode/usr/share/ucode/wifi/ap.uc
 +++ b/files-ucode/usr/share/ucode/wifi/ap.uc
-@@ -572,6 +572,19 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
+@@ -568,10 +568,16 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
+ 
+ 	iface.parse_encryption(config, data.config, phy_features);
+ 	if (data.config.band == '6g') {
+-		if (config.auth_type == 'psk-sae')
++		if (config.auth_type in ['psk', 'psk-sae'])
  			config.auth_type = 'sae';
- 		if (config.auth_type == 'eap-eap2')
+-		if (config.auth_type == 'eap-eap2')
++		if (config.auth_type in ['eap', 'eap-eap2'])
  			config.auth_type = 'eap2';
 +		/*
-+		 * WPA/WPA2-PSK and WPA2-EAP are not allowed on 6 GHz and make
-+		 * hostapd refuse the BSS. Upgrade them to SAE / WPA3-EAP (both
-+		 * PMF required) with the same key / server settings.
++		 * 6 GHz allows RSN only, and PMF is only set up for wpa >= 2:
++		 * WPA and WPA/WPA2 mixed encryption values leave wpa at 1 or 3.
 +		 */
-+		if (config.auth_type == 'psk') {
-+			config.auth_type = 'sae';
++		if (config.wpa)
 +			config.wpa = 2;
-+		}
-+		if (config.auth_type == 'eap') {
-+			config.auth_type = 'eap2';
-+			config.wpa = 2;
-+		}
  	}
  
  	if (config.auth_type in [ 'psk', 'psk-sae', 'psk-sae-compat' ] && data.config.band != '6g')

@@ -1,0 +1,321 @@
+From e90e3a228710f12c8a40fa17d51460f23d3098b7 Mon Sep 17 00:00:00 2001
+From: Matthew Cather <mattbob4@gmail.com>
+Date: Tue, 22 Sep 2026 13:48:17 -0700
+Subject: [PATCH] hostapd: return NULL from the stubbed rfkill_init()
+
+320-optional_rfkill.patch compiles rfkill out when CONFIG_RFKILL is unset
+and has the stub rfkill_init() return (void *) 1. Both callers own the
+struct rfkill_config they pass in and release it only when rfkill_init()
+returns NULL, so the sentinel silently disables the only cleanup path.
+The stubbed rfkill_deinit() frees nothing either, and nothing else ever
+holds the config, so it leaks on every interface add.
+
+NEED_RFKILL is referenced once in src/drivers/drivers.mak and never set,
+so the stub is the only configuration that gets built.
+
+Return NULL instead. That restores the contract for the callers in
+driver_nl80211.c and driver_wext.c and makes the compiled-out path behave
+like the already-exercised case where /dev/rfkill is simply absent.
+
+Signed-off-by: Matthew Cather <mattbob4@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/25339
+[Crescentm: from OpenWrt PR #25339 head ab8903a1a3fc14df63e3dc064054d9a8a06e27fe,
+ commit e90e3a2287, unchanged]
+---
+ .../services/hostapd/patches/320-optional_rfkill.patch       | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/services/hostapd/patches/320-optional_rfkill.patch b/package/network/services/hostapd/patches/320-optional_rfkill.patch
+index aeeaeb43..bcee09cb 100644
+--- a/package/network/services/hostapd/patches/320-optional_rfkill.patch
++++ b/package/network/services/hostapd/patches/320-optional_rfkill.patch
+@@ -38,7 +38,7 @@ Subject: [PATCH] hostapd: make rfkill support optional
+  ifdef NEED_RADIOTAP
+ --- a/src/drivers/rfkill.h
+ +++ b/src/drivers/rfkill.h
+-@@ -18,8 +18,24 @@ struct rfkill_config {
++@@ -18,8 +18,25 @@ struct rfkill_config {
+  	void (*unblocked_cb)(void *ctx);
+  };
+  
+@@ -49,7 +49,8 @@ Subject: [PATCH] hostapd: make rfkill support optional
+ +#else
+ +static inline struct rfkill_data * rfkill_init(struct rfkill_config *cfg)
+ +{
+-+	return (void *) 1;
+++	/* callers release the config only on a NULL return */
+++	return NULL;
+ +}
+ +
+ +static inline void rfkill_deinit(struct rfkill_data *rfkill)
+From 1772b67142da6939b363a413d494624a8ff34cf8 Mon Sep 17 00:00:00 2001
+From: Matthew Cather <mattbob4@gmail.com>
+Date: Tue, 22 Sep 2026 13:48:44 -0700
+Subject: [PATCH] hostapd: free the association frame taxonomy in ap_free_sta()
+
+600-ubus_support.patch adds sta->assoc_frame_taxonomy beside hostapd's
+own probe_ie_taxonomy and assoc_ie_taxonomy, and fills it with a
+wpabuf_alloc_copy() of the association frame, but never extends the
+CONFIG_TAXONOMY free block in ap_free_sta().
+
+hostapd frees its own two there. Ours is only ever replaced, so the last
+copy a station carried leaks when that station is freed on disassoc,
+deauth or inactivity timeout, and the copy is the whole association
+frame.
+
+Free it beside the other two.
+
+Signed-off-by: Matthew Cather <mattbob4@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/25339
+[Crescentm: from OpenWrt PR #25339 head ab8903a1a3fc14df63e3dc064054d9a8a06e27fe,
+ commit 1772b67142, unchanged]
+---
+ .../hostapd/patches/600-ubus_support.patch    | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/package/network/services/hostapd/patches/600-ubus_support.patch b/package/network/services/hostapd/patches/600-ubus_support.patch
+index f9e35303..936750ab 100644
+--- a/package/network/services/hostapd/patches/600-ubus_support.patch
++++ b/package/network/services/hostapd/patches/600-ubus_support.patch
+@@ -320,7 +320,16 @@ probe/assoc/auth requests via object subscribe.
+  		wpa_printf(MSG_DEBUG, "RRM action %u is not supported",
+ --- a/src/ap/sta_info.c
+ +++ b/src/ap/sta_info.c
+-@@ -621,6 +621,7 @@ void ap_handle_timer(void *eloop_ctx, vo
++@@ -361,6 +361,8 @@ void ap_free_sta(struct hostapd_data *ha
++ 	sta->probe_ie_taxonomy = NULL;
++ 	wpabuf_free(sta->assoc_ie_taxonomy);
++ 	sta->assoc_ie_taxonomy = NULL;
+++	wpabuf_free(sta->assoc_frame_taxonomy);
+++	sta->assoc_frame_taxonomy = NULL;
++ #endif /* CONFIG_TAXONOMY */
++ 
++ 	ht40_intolerant_remove(hapd->iface, sta);
++@@ -621,6 +623,7 @@ void ap_handle_timer(void *eloop_ctx, vo
+  		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
+  			       HOSTAPD_LEVEL_INFO, "deauthenticated due to "
+  			       "local deauth request");
+@@ -328,7 +337,7 @@ probe/assoc/auth requests via object subscribe.
+  		ap_free_sta(hapd, sta);
+  		return;
+  	}
+-@@ -789,6 +790,7 @@ skip_poll:
++@@ -789,6 +792,7 @@ skip_poll:
+  		mlme_deauthenticate_indication(
+  			hapd, sta,
+  			WLAN_REASON_PREV_AUTH_NOT_VALID);
+@@ -336,7 +345,7 @@ probe/assoc/auth requests via object subscribe.
+  		ap_free_sta(hapd, sta);
+  		break;
+  	}
+-@@ -1793,17 +1795,30 @@ void ap_sta_set_authorized_event(struct
++@@ -1793,17 +1797,30 @@ void ap_sta_set_authorized_event(struct
+  		os_snprintf(buf, sizeof(buf), MACSTR, MAC2STR(sta->addr));
+  
+  	if (authorized) {
+@@ -367,7 +376,7 @@ probe/assoc/auth requests via object subscribe.
+  
+  #ifdef CONFIG_P2P
+  		if (wpa_auth_get_ip_addr(sta->wpa_sm, ip_addr_buf) == 0) {
+-@@ -1815,6 +1830,13 @@ void ap_sta_set_authorized_event(struct
++@@ -1815,6 +1832,13 @@ void ap_sta_set_authorized_event(struct
+  		}
+  #endif /* CONFIG_P2P */
+  
+@@ -381,7 +390,7 @@ probe/assoc/auth requests via object subscribe.
+  		keyid = ap_sta_wpa_get_keyid(hapd, sta);
+  		if (keyid) {
+  			os_snprintf(keyid_buf, sizeof(keyid_buf),
+-@@ -1839,17 +1861,19 @@ void ap_sta_set_authorized_event(struct
++@@ -1839,17 +1863,19 @@ void ap_sta_set_authorized_event(struct
+  				    " vlanid=%u", sta->vlan_id);
+  #endif /* CONFIG_NO_VLAN */
+  
+From a242901ad31af2b3f7dd35754df0484f9cc716af Mon Sep 17 00:00:00 2001
+From: Matthew Cather <mattbob4@gmail.com>
+Date: Tue, 22 Sep 2026 13:49:31 -0700
+Subject: [PATCH] hostapd: free the neighbor list in hostapd_bss_tr_send()
+
+hostapd_bss_tr_send() builds the neighbor report list for a BSS
+transition request with os_zalloc() and frees it on exactly one path,
+when hexstr2bin() rejects an entry. The three MBO validation returns, the
+wnm_send_bss_tm_req() failure return and the success path all drop the
+pointer.
+
+wnm_send_bss_tm_req() copies the list into its own frame buffer and never
+takes ownership, so every bss_transition_request that carries neighbors
+leaks one list. One candidate per steer means the leak grows with the
+number of steers since boot, which on a busy controller is continuous.
+
+Give the function a single exit that frees it. free() accepts NULL, so
+the paths that never allocated are unaffected.
+
+Signed-off-by: Matthew Cather <mattbob4@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/25339
+[Crescentm: from OpenWrt PR #25339 head ab8903a1a3fc14df63e3dc064054d9a8a06e27fe,
+ commit a242901ad3; unchanged except for line numbers (applied on top of 0014)]
+---
+ .../services/hostapd/src/src/ap/ubus.c        | 30 ++++++++++++-------
+ 1 file changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ubus.c b/package/network/services/hostapd/src/src/ap/ubus.c
+index 4dd876a3..a51560ac 100644
+--- a/package/network/services/hostapd/src/src/ap/ubus.c
++++ b/package/network/services/hostapd/src/src/ap/ubus.c
+@@ -1604,6 +1604,7 @@ hostapd_bss_tr_send(struct hostapd_data *hapd, u8 *addr, bool disassoc_imminent,
+ 	u8 req_mode = 0;
+ 	u8 mbo_buf[10];
+ 	size_t mbo_len = 0;
++	int ret = 0;
+ 
+ 	hapd = hostapd_ubus_sta_bss(hapd, addr, &sta);
+ 	if (!sta)
+@@ -1638,8 +1639,8 @@ hostapd_bss_tr_send(struct hostapd_data *hapd, u8 *addr, bool disassoc_imminent,
+ 			*nr_cur++ = WLAN_EID_NEIGHBOR_REPORT;
+ 			*nr_cur++ = (u8) len;
+ 			if (hexstr2bin(blobmsg_data(cur), nr_cur, len)) {
+-				free(nr);
+-				return UBUS_STATUS_INVALID_ARGUMENT;
++				ret = UBUS_STATUS_INVALID_ARGUMENT;
++				goto out;
+ 			}
+ 
+ 			nr_cur += len;
+@@ -1662,16 +1663,22 @@ hostapd_bss_tr_send(struct hostapd_data *hapd, u8 *addr, bool disassoc_imminent,
+ 	if (mbo) {
+ 		u8 *mbo_pos = mbo_buf;
+ 
+-		if (mbo_reason > MBO_TRANSITION_REASON_PREMIUM_AP)
+-			return UBUS_STATUS_INVALID_ARGUMENT;
++		if (mbo_reason > MBO_TRANSITION_REASON_PREMIUM_AP) {
++			ret = UBUS_STATUS_INVALID_ARGUMENT;
++			goto out;
++		}
+ 
+ 		if (cell_pref != MBO_CELL_PREF_EXCLUDED &&
+ 		    cell_pref != MBO_CELL_PREF_NO_USE &&
+-		    cell_pref != MBO_CELL_PREF_USE)
+-			return UBUS_STATUS_INVALID_ARGUMENT;
++		    cell_pref != MBO_CELL_PREF_USE) {
++			ret = UBUS_STATUS_INVALID_ARGUMENT;
++			goto out;
++		}
+ 
+-		if (reassoc_delay > 65535 || (reassoc_delay && !disassoc_imminent))
+-			return UBUS_STATUS_INVALID_ARGUMENT;
++		if (reassoc_delay > 65535 || (reassoc_delay && !disassoc_imminent)) {
++			ret = UBUS_STATUS_INVALID_ARGUMENT;
++			goto out;
++		}
+ 
+ 		*mbo_pos++ = MBO_ATTR_ID_TRANSITION_REASON;
+ 		*mbo_pos++ = 1;
+@@ -1691,11 +1698,14 @@ hostapd_bss_tr_send(struct hostapd_data *hapd, u8 *addr, bool disassoc_imminent,
+ 	}
+ #endif
+ 
++	/* wnm_send_bss_tm_req() copies the neighbor list into its own frame */
+ 	if (wnm_send_bss_tm_req(hapd, sta, req_mode, disassoc_timer, validity_period, NULL,
+ 				dialog_token, NULL, nr, nr_len, mbo_len ? mbo_buf : NULL, mbo_len))
+-		return UBUS_STATUS_UNKNOWN_ERROR;
++		ret = UBUS_STATUS_UNKNOWN_ERROR;
+ 
+-	return 0;
++out:
++	free(nr);
++	return ret;
+ }
+ 
+ enum {
+From ab8903a1a3fc14df63e3dc064054d9a8a06e27fe Mon Sep 17 00:00:00 2001
+From: Matthew Cather <mattbob4@gmail.com>
+Date: Tue, 22 Sep 2026 13:49:46 -0700
+Subject: [PATCH] hostapd: do not notify vlans after the ubus context is torn
+ down
+
+hostapd_free_hapd_data() calls hostapd_ubus_free_bss() and then, three
+statements later, vlan_deinit(). When that BSS holds the last ubus
+reference, hostapd_ubus_ref_dec() frees the shared context and sets the
+file-scope ctx to NULL. vlan_deinit() then removes each dynamic VLAN, and
+every vlan_if_remove() reaches hostapd_ubus_vlan_action(), which passes
+that NULL ctx to ubus_notify().
+
+The has_subscribers guard cannot catch it: nothing clears that flag when
+the object is removed, so a BSS that had a subscriber still takes the
+notify path on the way down and faults.
+
+Guard on ctx, the way hostapd_ubus_free_bss() already does.
+
+Signed-off-by: Matthew Cather <mattbob4@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/25339
+[Crescentm: from OpenWrt PR #25339 head ab8903a1a3fc14df63e3dc064054d9a8a06e27fe,
+ commit ab8903a1a3; unchanged except for line numbers (applied on top of 0014)]
+---
+ package/network/services/hostapd/src/src/ap/ubus.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ubus.c b/package/network/services/hostapd/src/src/ap/ubus.c
+index a51560ac..ad00b58b 100644
+--- a/package/network/services/hostapd/src/src/ap/ubus.c
++++ b/package/network/services/hostapd/src/src/ap/ubus.c
+@@ -2126,6 +2126,11 @@ hostapd_ubus_vlan_action(struct hostapd_data *hapd, struct hostapd_vlan *vlan,
+ 	void *c;
+ 	int i;
+ 
++	/* vlan_deinit() runs after hostapd_ubus_free_bss() may have dropped the
++	 * last reference and freed the shared context */
++	if (!ctx)
++		return;
++
+ 	if (!obj->has_subscribers)
+ 		return;
+ 
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 16:15:00 +0800
+Subject: [PATCH] hostapd: refresh 601 and 803 after the taxonomy free
+
+The sta_info.c hunk that 1772b67142 adds to 600-ubus_support.patch moves
+the code that 601-ucode_support.patch and 803-hostapd-fix-80211be-build.patch
+patch by two lines. Refresh their line numbers so the series applies
+without offsets. No content change.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+diff --git a/package/network/services/hostapd/patches/601-ucode_support.patch b/package/network/services/hostapd/patches/601-ucode_support.patch
+index 27c595e7..3af897d3 100644
+--- a/package/network/services/hostapd/patches/601-ucode_support.patch
++++ b/package/network/services/hostapd/patches/601-ucode_support.patch
+@@ -509,7 +509,7 @@ as adding/removing interfaces.
+  
+ --- a/src/ap/sta_info.c
+ +++ b/src/ap/sta_info.c
+-@@ -553,6 +553,11 @@ void ap_free_sta(struct hostapd_data *ha
++@@ -555,6 +555,11 @@ void ap_free_sta(struct hostapd_data *ha
+  	os_free(sta->eap_auth_data.rsnxe);
+  #endif /* CONFIG_IEEE8021X_AUTH */
+  
+@@ -521,7 +521,7 @@ as adding/removing interfaces.
+  	os_free(sta);
+  }
+  
+-@@ -1779,6 +1784,8 @@ void ap_sta_set_authorized_event(struct
++@@ -1781,6 +1786,8 @@ void ap_sta_set_authorized_event(struct
+  #endif /* CONFIG_P2P */
+  	const u8 *ip_ptr = NULL;
+  
+diff --git a/package/network/services/hostapd/patches/803-hostapd-fix-80211be-build.patch b/package/network/services/hostapd/patches/803-hostapd-fix-80211be-build.patch
+index cf843834..c71995c0 100644
+--- a/package/network/services/hostapd/patches/803-hostapd-fix-80211be-build.patch
++++ b/package/network/services/hostapd/patches/803-hostapd-fix-80211be-build.patch
+@@ -1,6 +1,6 @@
+ --- a/src/ap/sta_info.c
+ +++ b/src/ap/sta_info.c
+-@@ -2187,3 +2187,22 @@ void ap_sta_free_sta_profile(struct mld_
++@@ -2189,3 +2189,22 @@ void ap_sta_free_sta_profile(struct mld_
+  	}
+  }
+  #endif /* CONFIG_IEEE80211BE */
+-- 
+2.43.0
+

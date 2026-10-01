@@ -1,0 +1,47 @@
+From e691ab4ce59b7f29b07c44cdd396c5f0985cae05 Mon Sep 17 00:00:00 2001
+From: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+Date: Wed, 2 Sep 2026 00:36:23 +0300
+Subject: [PATCH] Fix PMKSA entry removal
+
+The logic in pmksa_cache_remove() was quite broken and would have ended
+up in an infinite loop if an entry that is not the first or second in
+the list were to be removed. Fix this to iterate through the list
+properly.
+
+Fixes: 5ea7a2f54528 ("DPP: Drop PMKSA entry if AP reject association due to invalid PMKID")
+Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+(cherry picked from commit e691ab4ce59b7f29b07c44cdd396c5f0985cae05)
+---
+ src/rsn_supp/pmksa_cache.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/src/rsn_supp/pmksa_cache.c b/src/rsn_supp/pmksa_cache.c
+index 9506dfdf1..abd936cb2 100644
+--- a/src/rsn_supp/pmksa_cache.c
++++ b/src/rsn_supp/pmksa_cache.c
+@@ -61,18 +61,19 @@ static void pmksa_cache_free_entry(struct rsn_pmksa_cache *pmksa,
+ void pmksa_cache_remove(struct rsn_pmksa_cache *pmksa,
+ 			struct rsn_pmksa_cache_entry *entry)
+ {
+-	struct rsn_pmksa_cache_entry *e;
++	struct rsn_pmksa_cache_entry *e, *prev = NULL;
+ 
+ 	e = pmksa->pmksa;
+ 	while (e) {
+ 		if (e == entry) {
+-			pmksa->pmksa = entry->next;
+-			break;
+-		}
+-		if (e->next == entry) {
+-			e->next = entry->next;
++			if (!prev)
++				pmksa->pmksa = entry->next;
++			else
++				prev->next = entry->next;
+ 			break;
+ 		}
++		prev = e;
++		e = e->next;
+ 	}
+ 
+ 	if (!e) {

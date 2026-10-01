@@ -1,0 +1,47 @@
+From a0528607c7b17c31b8435aaec9e7c732fa7c7fc4 Mon Sep 17 00:00:00 2001
+From: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+Date: Thu, 13 Aug 2026 12:26:25 +0300
+Subject: [PATCH] WNM: Fix group key parsing from WNM sleep mode exit
+
+Do not use the hardcoded IGTK/BIGTK length of 16 octets when figuring
+out where the subelement ends since a longer key might be used. This
+could have ignored some of the group keys (mainly, BIGTK) when
+BIP-GMAC-256 is used as the group management cipher suite.
+
+Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+(cherry picked from commit a0528607c7b17c31b8435aaec9e7c732fa7c7fc4)
+---
+ wpa_supplicant/wnm_sta.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/wpa_supplicant/wnm_sta.c b/wpa_supplicant/wnm_sta.c
+index 1c8b93169..3a534fd4b 100644
+--- a/wpa_supplicant/wnm_sta.c
++++ b/wpa_supplicant/wnm_sta.c
+@@ -279,7 +279,6 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+ 				wpa_s->wpa,
+ 				WNM_SLEEP_SUBELEM_GTK,
+ 				ptr);
+-			ptr += 13 + gtk_len;
+ 		} else if (*ptr == WNM_SLEEP_SUBELEM_IGTK) {
+ 			if (ptr[1] < 2 + 6 +
+ 			    wpa_cipher_key_len(wpa_s->mgmt_group_cipher)) {
+@@ -289,7 +288,6 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+ 			}
+ 			wpa_wnmsleep_install_key(wpa_s->wpa,
+ 						 WNM_SLEEP_SUBELEM_IGTK, ptr);
+-			ptr += 10 + WPA_IGTK_LEN;
+ 		} else if (*ptr == WNM_SLEEP_SUBELEM_BIGTK) {
+ 			if (ptr[1] < 2 + 6 +
+ 			    wpa_cipher_key_len(wpa_s->mgmt_group_cipher)) {
+@@ -299,9 +297,9 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+ 			}
+ 			wpa_wnmsleep_install_key(wpa_s->wpa,
+ 						 WNM_SLEEP_SUBELEM_BIGTK, ptr);
+-			ptr += 10 + WPA_BIGTK_LEN;
+ 		} else
+ 			break; /* skip the loop */
++		ptr += 2 + ptr[1];
+ 	}
+ }
+ 

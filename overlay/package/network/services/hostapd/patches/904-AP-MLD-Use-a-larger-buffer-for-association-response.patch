@@ -1,0 +1,32 @@
+From c64dce6da043bf9c7651b74c9190e4049bf1953a Mon Sep 17 00:00:00 2001
+From: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+Date: Mon, 24 Aug 2026 13:57:44 +0300
+Subject: [PATCH] AP MLD: Use a larger buffer for association response
+
+It is possible for some cases with a huge number of links to end up
+needing more room in the MLE in (Re)Association Response frame, so
+increase the allocation based on the calculated length of that element.
+
+Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+(cherry picked from commit c64dce6da043bf9c7651b74c9190e4049bf1953a)
+---
+ src/ap/ieee802_11.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 2ce49406e..71bf8589f 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -6719,8 +6719,11 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 		buflen += 3 + sizeof(struct ieee80211_eht_operation);
+ 		if (hapd->iconf->punct_bitmap)
+ 			buflen += EHT_OPER_DISABLED_SUBCHAN_BITMAP_SIZE;
+-		if (ap_sta_is_mld(hapd, sta))
++		if (ap_sta_is_mld(hapd, sta)) {
+ 			buflen += hostapd_eid_eht_ml_tid_to_link_map_len(hapd);
++			buflen += hostapd_eid_eht_basic_ml_len(hapd, sta,
++							       false, true);
++		}
+ 	}
+ #endif /* CONFIG_IEEE80211BE */
+ 

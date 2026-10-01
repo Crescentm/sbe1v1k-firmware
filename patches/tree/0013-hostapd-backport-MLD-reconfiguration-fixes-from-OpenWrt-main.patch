@@ -1,0 +1,443 @@
+From 79444dcc6847fc42e8ceb7a2c339442c7b75a3c3 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Fri, 4 Sep 2026 14:50:02 +0200
+Subject: [PATCH] hostapd: let a preserved BSS keep the address it already has
+
+iface_config_macaddr_list() marks every address of the running configuration
+of a PHY, and every MLD address, with -1. The branch that carries a preserved
+BSS's address into the new configuration read that as taken and was therefore
+never reached, so the address stayed unclaimed in macaddr_list while the BSS
+went on using it. The generator of step 6 then handed the same address to a
+newly added BSS:
+
+    Duplicate BSSID b6:ad:9f:70:fb:4a on interface 'ap-mld6' and 'ap-mld0'.
+    Failed to add new bss ap-mld0 on phy phy0.0
+    Restart interface for phy phy0.0
+
+hostapd refused its own configuration and restarted the PHY under the stations
+it served. A four address backhaul station survived that restart as associated
+and stopped carrying data, which took a Multi-AP agent off the mesh until its
+daemon was restarted.
+
+The address is asked about by the BSS that already holds it, so a reservation
+over it is its own. Measured on a seven BSS AP MLD: the reconfiguration that
+produced the three lines above now produces none of them, and the backhaul
+station keeps its association across it.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 79444dcc6847fc42e8ceb7a2c339442c7b75a3c3)
+---
+ package/network/services/hostapd/files/hostapd.uc | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/services/hostapd/files/hostapd.uc b/package/network/services/hostapd/files/hostapd.uc
+index 218cad4b..cdc41ce3 100644
+--- a/package/network/services/hostapd/files/hostapd.uc
++++ b/package/network/services/hostapd/files/hostapd.uc
+@@ -822,11 +822,14 @@ function iface_reload_config(name, phydev, config, old_config)
+ 			return false;
+ 
+ 		// try to preserve MAC address of this BSS by reassigning another
+-		// BSS if necessary
++		// BSS if necessary. iface_config_macaddr_list() marks addresses of
++		// the running config with -1, so only a claim by a different BSS
++		// blocks reuse here.
++		let held = macaddr_list[prev_config.bssid];
+ 		if ((cur_config.default_macaddr || cur_config.random_macaddr) &&
+ 		    cur_config.random_macaddr == prev_config.random_macaddr &&
+ 		    cur_config.default_macaddr == prev_config.default_macaddr &&
+-		    !macaddr_list[prev_config.bssid]) {
++		    (held == null || held == -1 || held == i)) {
+ 			macaddr_list[prev_config.bssid] = i;
+ 			cur_config.bssid = prev_config.bssid;
+ 		}
+From 4c6992b13bfab5105ea1f91f57e5c23601cae1c3 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Fri, 4 Sep 2026 20:34:16 +0200
+Subject: [PATCH] hostapd: keep MLD interfaces and their BSSes across config
+ changes
+
+A config change below MLD level destroyed and recreated MLD netdevs and BSSes
+that could have been kept. This restarted the PHY and dropped all connected
+stations. Three separate issues caused this:
+
+1. mld_find_matching_config() compared the whole vif config, so a change to an
+   SSID created a new MLD. mld_set_config() then reloaded every interface
+   without it, bss_check_mld() found no registry entry, iface_check_mld()
+   spliced all MLD BSSes out of the config, and the interface was removed when
+   no BSS was left. Replace it with mld_config_matches(), which compares only
+   the fields that define the netdev: name, wiphy, radio mask and address.
+   All other fields are BSS level and reach hostapd through the per PHY config
+   file. The radio mask is compared instead of the radio list, so a new order
+   of the device list keeps the MLD. mld_rename_bss() has no callers left and
+   is removed.
+
+2. bss_find_existing() accepted a hash match between MLD BSSes with different
+   names, which happens when the BSS set shifts and BSSes share the same
+   settings. Step 4 of iface_reload_config() then renamed one MLD netdev onto
+   the name of another one, which fails with EEXIST. An MLD BSS is identified
+   by its netdev name, so skip old MLD BSSes with a different name. The search
+   continues, and an old BSS with the correct name is kept.
+
+3. Step 2 preserved and renamed the first BSS even when the first BSS changes
+   between plain BSS and MLD link. This cannot work, because
+   hostapd_bss_setup_multi_link() only runs when a BSS is allocated. A rename
+   of an MLD link also renames the netdev that the other radios share. Delete
+   and recreate the first BSS instead. If no other BSS is kept, keep the old
+   first BSS until the first new BSS exists, so that the PHY always has a BSS.
+   Its address stays reserved until the delete. Delete it right after that,
+   because its netdev and /var/run/hostapd/<name> keep its name, and a later
+   new BSS can use that name. If another BSS is kept, delete the old first BSS
+   in step 3 as before, since a kept BSS can be renamed onto its name.
+   bss_remove() holds the delete sequence for both paths.
+
+Tested on an AP MLD with 7 BSSes, going from 1 to 7 configured BSSes. The
+messages "Skip MLD interface", "Remove interface", "Restart interface for phy"
+and "Renaming device ... failed: Object exists" no longer appear, and a
+4-address backhaul station stays associated across the change.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 4c6992b13bfab5105ea1f91f57e5c23601cae1c3)
+---
+ .../network/services/hostapd/files/hostapd.uc | 107 +++++++++++++-----
+ 1 file changed, 77 insertions(+), 30 deletions(-)
+
+diff --git a/package/network/services/hostapd/files/hostapd.uc b/package/network/services/hostapd/files/hostapd.uc
+index cdc41ce3..41a01951 100644
+--- a/package/network/services/hostapd/files/hostapd.uc
++++ b/package/network/services/hostapd/files/hostapd.uc
+@@ -574,6 +574,12 @@ function bss_find_existing(config, prev_config, prev_hash)
+ 		if (!prev_hash[i] || hash != prev_hash[i])
+ 			continue;
+ 
++		// An MLD BSS is identified by its netdev name, which is shared with
++		// all radios that contribute a link. A rename onto the name of
++		// another MLD fails with EEXIST.
++		if (config.mld_ap && prev_config.bss[i].ifname != config.ifname)
++			continue;
++
+ 		prev_hash[i] = null;
+ 		return i;
+ 	}
+@@ -603,6 +609,14 @@ function get_config_bss(name, config, idx)
+ 	return if_bss[ifname];
+ }
+ 
++function bss_remove(name, bss, config)
++{
++	hostapd.printf(`Remove bss '${config.ifname}' on phy '${name}'`);
++	bss.delete();
++	if (!config.mld_ap)
++		wdev_remove(config.ifname);
++}
++
+ const radio_chan_fields = [
+ 	"op_class",
+ 	"vht_oper_chwidth", "vht_oper_centr_freq_seg0_idx",
+@@ -843,8 +857,21 @@ function iface_reload_config(name, phydev, config, old_config)
+ 		return false;
+ 	}
+ 
++	// A BSS cannot change between plain and MLD link in place, because
++	// hostapd_bss_setup_multi_link() only runs when a BSS is allocated. A
++	// rename to an MLD name fails as well, since bss_check_mld() already
++	// created that netdev, and a rename of an MLD link renames the netdev of
++	// all radios. Delete and recreate the first BSS instead. If no other BSS
++	// is kept, keep the old one until the first new BSS exists, so that the
++	// PHY never runs without a BSS, but no longer: its netdev and its
++	// control socket keep its name, which a later new BSS can reuse.
++	let deferred_bss, deferred_cfg;
++	const first_bss_converts =
++		(config.bss[0].mld_ap || old_config.bss[0].mld_ap) &&
++		old_config.bss[0].ifname != config.bss[0].ifname;
++
+ 	// Step 2: if none were found, rename and preserve the first one
+-	if (length(bss_list) == 0) {
++	if (length(bss_list) == 0 && !first_bss_converts) {
+ 		// can't change the bssid of the first bss
+ 		if (config.bss[0].bssid != old_config.bss[0].bssid) {
+ 			if (!config.bss[0].default_macaddr) {
+@@ -874,11 +901,17 @@ function iface_reload_config(name, phydev, config, old_config)
+ 		if (!prev_bss)
+ 			return false;
+ 
+-		let ifname = old_config.bss[i].ifname;
+-		hostapd.printf(`Remove bss '${ifname}' on phy '${name}'`);
+-		prev_bss.delete();
+-		if (!old_config.bss[i].mld_ap)
+-			wdev_remove(ifname);
++		if (!i && !length(bss_list)) {
++			deferred_bss = prev_bss;
++			deferred_cfg = old_config.bss[0];
++			// The address is still in use until the deferred delete, but it
++			// must not be assigned to any of the new BSSes.
++			if (deferred_cfg.bssid)
++				macaddr_list[deferred_cfg.bssid] = -1;
++			continue;
++		}
++
++		bss_remove(name, prev_bss, old_config.bss[i]);
+ 	}
+ 
+ 	// Step 4: rename preserved interfaces, use temporary name on duplicates
+@@ -963,6 +996,11 @@ function iface_reload_config(name, phydev, config, old_config)
+ 			hostapd.printf(`Failed to add new bss ${ifname} on phy ${name}`);
+ 			return false;
+ 		}
++
++		if (deferred_bss) {
++			bss_remove(name, deferred_bss, deferred_cfg);
++			deferred_bss = null;
++		}
+ 	}
+ 
+ 	// Step 8: update interface bss order
+@@ -1258,13 +1296,14 @@ function bss_config(bss_name) {
+ 	}
+ }
+ 
+-function mld_rename_bss(data, name)
++function mld_radio_mask(radios)
+ {
+-	if (data.ifname == name)
+-		return true;
++	let radio_mask = 0;
++	for (let r in radios)
++		if (r != null)
++			radio_mask |= 1 << r;
+ 
+-	// TODO: handle rename gracefully
+-	return false;
++	return radio_mask;
+ }
+ 
+ function mld_add_bss(name, data, phy_list, i)
+@@ -1292,20 +1331,30 @@ function mld_add_bss(name, data, phy_list, i)
+ 		data.default_macaddr = true;
+ 	}
+ 
+-	let radio_mask = 0;
+-	for (let r in config.radios)
+-		if (r != null)
+-			radio_mask |= 1 << r;
+-
+-	data.radio_mask = radio_mask;
++	data.radio_mask = mld_radio_mask(config.radios);
+ 	data.ifname = name;
+ }
+ 
+-function mld_find_matching_config(list, config)
++// An MLD netdev is defined by its name, wiphy, radio mask and address, i.e. the
++// config fields used by mld_add_bss(). The caller looks up the previous entry by
++// name. All remaining fields are BSS level and reach hostapd through the per PHY
++// config file, so a change to them must not destroy the netdev and all BSSes
++// attached to it.
++function mld_config_matches(data, config)
+ {
+-	for (let name, data in list)
+-		if (is_equal(data.config, config))
+-			return name;
++	if (!data.ifname || !data.config)
++		return false;
++
++	if (data.config.phy != config.phy)
++		return false;
++
++	if (data.radio_mask != mld_radio_mask(config.radios))
++		return false;
++
++	if (config.macaddr)
++		return data.macaddr == config.macaddr;
++
++	return !!data.default_macaddr;
+ }
+ 
+ function mld_reload_interface(name)
+@@ -1329,16 +1378,14 @@ function mld_set_config(config)
+ 
+ 	hostapd.printf(`Set MLD config: ${keys(config)}`);
+ 
+-	// find renamed/new interfaces
++	// find kept/new interfaces
+ 	for (let name, data in config) {
+-		let prev = mld_find_matching_config(prev_mld, data);
+-		if (prev) {
+-			let data = prev_mld[prev];
+-			if (mld_rename_bss(data, name)) {
+-				new_mld[name] = data;
+-				delete prev_mld[prev];
+-				continue;
+-			}
++		let prev = prev_mld[name];
++		if (prev && mld_config_matches(prev, data)) {
++			prev.config = data;
++			new_mld[name] = prev;
++			delete prev_mld[name];
++			continue;
+ 		}
+ 
+ 		new_mld[name] = {
+From 87623c1e67a95d359da65be51ec4f2af6354ecec Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Wed, 23 Sep 2026 12:25:30 +0200
+Subject: [PATCH] hostapd: give the radio 0 link of an MLD the MLD address
+
+bss_macaddr_next() gives the address of an MLD to its link on radio 0, and
+the address generation relies on that. Two paths keep an old link address
+instead, even after the MLD address changed:
+
+- Step 2 of iface_reload_config() keeps the old BSSID of the first BSS when
+  the new one is a default address, because the first BSS cannot change it
+  in place.
+- The keep loop in iface_restart() gives a surviving BSS with a default
+  address its previous BSSID again.
+
+The link then keeps its old address, and the MLD address is on no link.
+
+In one case, a config change gave ap-mld0 a new MLD address and reloaded it
+in place. Link 0 kept the previous MLD address as its link address, so the
+new MLD address was on no link. From then on, about 30 % of the unicast
+frames to the associated backhaul station were lost (68 of 100 echo requests
+arrived), while the AP counted no failed transmission. A new association did
+not clear it; a full wifi down/up did.
+
+Move the decision of bss_macaddr_next() into bss_mld_addr(). The keep loop
+of iface_restart() skips a link whose previous address is not the MLD
+address, so the link gets the MLD address. Step 2 takes the restart path in
+the same case. A link that already has the MLD address stays in place, and
+plain BSSes, links on other radios and static addresses keep the old
+behaviour.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 87623c1e67a95d359da65be51ec4f2af6354ecec)
+---
+ .../network/services/hostapd/files/hostapd.uc | 23 ++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/package/network/services/hostapd/files/hostapd.uc b/package/network/services/hostapd/files/hostapd.uc
+index 41a01951..e92425a6 100644
+--- a/package/network/services/hostapd/files/hostapd.uc
++++ b/package/network/services/hostapd/files/hostapd.uc
+@@ -352,13 +352,18 @@ function iface_macaddr_init(phydev, config, macaddr_list)
+ // mld_add_bss() takes it from radio 0, so only a link on radio 0 can use it. A
+ // link on another radio must keep the reservation, because the two links would
+ // otherwise use one address.
+-function bss_macaddr_next(phydev, macaddr_list, bss, idx)
++function bss_mld_addr(phydev, macaddr_list, bss)
+ {
+ 	let mld_addr = bss.mld_bssid;
+ 	if (phydev.radio || macaddr_list[mld_addr] != -1)
+-		mld_addr = null;
++		return null;
++
++	return mld_addr;
++}
+ 
+-	return phydev.macaddr_next(idx, mld_addr);
++function bss_macaddr_next(phydev, macaddr_list, bss, idx)
++{
++	return phydev.macaddr_next(idx, bss_mld_addr(phydev, macaddr_list, bss));
+ }
+ 
+ function csa_timer_cancel(name)
+@@ -404,6 +409,7 @@ function iface_restart(phydev, config, old_config)
+ 	// compares the link addresses in the association response with the
+ 	// addresses it learned. If the addresses differ, the non-AP MLD drops the
+ 	// association. Therefore a BSS that survives the restart keeps its address.
++	// A link that must carry the MLD address follows the MLD address instead.
+ 	for (let i = 0; i < length(config.bss); i++) {
+ 		let bss = config.bss[i];
+ 		let prev = prev_bssid[bss.ifname];
+@@ -411,6 +417,10 @@ function iface_restart(phydev, config, old_config)
+ 		if (!bss.default_macaddr || !prev || macaddr_list[prev] != null)
+ 			continue;
+ 
++		let mld_addr = bss_mld_addr(phydev, macaddr_list, bss);
++		if (mld_addr && prev != mld_addr)
++			continue;
++
+ 		bss.bssid = prev;
+ 		macaddr_list[prev] = i;
+ 		keep[i] = true;
+@@ -873,6 +883,13 @@ function iface_reload_config(name, phydev, config, old_config)
+ 	// Step 2: if none were found, rename and preserve the first one
+ 	if (length(bss_list) == 0 && !first_bss_converts) {
+ 		// can't change the bssid of the first bss
++		let mld_addr = config.bss[0].default_macaddr &&
++			bss_mld_addr(phydev, macaddr_list, config.bss[0]);
++		if (mld_addr && old_config.bss[0].bssid != mld_addr) {
++			hostapd.printf(`MLD address of first interface changed: ${lc(old_config.bss[0].bssid)} -> ${lc(mld_addr)}`);
++			return false;
++		}
++
+ 		if (config.bss[0].bssid != old_config.bss[0].bssid) {
+ 			if (!config.bss[0].default_macaddr) {
+ 				hostapd.printf(`BSSID of first interface changed: ${lc(old_config.bss[0].bssid)} -> ${lc(config.bss[0].bssid)}`);
+From 9a81bf528dcd3e6d868492ab293263d186336992 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Mon, 28 Sep 2026 14:47:19 +0200
+Subject: [PATCH] hostapd: move the control socket with a renamed BSS
+
+With CONFIG_IEEE80211BE, hostapd names the control socket of a BSS
+after hapd->ctrl_sock_iface, not after conf->iface. bss.rename()
+changed conf->iface and opened the socket again, but kept the old
+ctrl_sock_iface. The renamed BSS therefore kept the socket of its old
+name.
+
+A reload that renames phy0-ap0 to phy0-ap2 and then adds a new
+phy0-ap0 failed for this reason. The new BSS found
+/var/run/hostapd/phy0-ap0 bound by the renamed BSS ("ctrl_iface exists
+and seems to be in use"), add_bss failed, and hostapd.uc restarted
+the whole phy. Measured on slot-1-agent2, 2026-09-28 13:56:19 (phy0)
+and 13:56:21 (phy1): each restart took all BSSes of the phy down for
+about 2 s.
+
+Set ctrl_sock_iface from the new name before the socket is opened
+again, as start_ctrl_iface_bss() does for a new BSS.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit 9a81bf528dcd3e6d868492ab293263d186336992)
+---
+ package/network/services/hostapd/src/src/ap/ucode.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ucode.c b/package/network/services/hostapd/src/src/ap/ucode.c
+index 2e26757e..04d2bf65 100644
+--- a/package/network/services/hostapd/src/src/ap/ucode.c
++++ b/package/network/services/hostapd/src/src/ap/ucode.c
+@@ -832,6 +832,7 @@ uc_hostapd_bss_rename(uc_vm_t *vm, size_t nargs)
+ 	if (!strncmp(hapd->conf->ssid.vlan, hapd->conf->iface, sizeof(hapd->conf->ssid.vlan)))
+ 		os_strlcpy(hapd->conf->ssid.vlan, ifname, sizeof(hapd->conf->ssid.vlan));
+ 	os_strlcpy(hapd->conf->iface, ifname, sizeof(hapd->conf->iface));
++	hostapd_set_ctrl_sock_iface(hapd);
+ 	hostapd_ubus_add_bss(hapd);
+ 
+ 	hostapd_ucode_update_interfaces();
+From b833ad3511a67099dd3d0f0b98f4cea5f009dd69 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Mon, 28 Sep 2026 14:47:30 +0200
+Subject: [PATCH] hostapd: initialise the result of bss.rename()
+
+bss.rename(ifname, true) skips the driver rename, and ret was then
+read without a value. hostapd.uc passes no second argument today, so
+no caller reaches this.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit b833ad3511a67099dd3d0f0b98f4cea5f009dd69)
+---
+ package/network/services/hostapd/src/src/ap/ucode.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ucode.c b/package/network/services/hostapd/src/src/ap/ucode.c
+index 04d2bf65..20d3d5c6 100644
+--- a/package/network/services/hostapd/src/src/ap/ucode.c
++++ b/package/network/services/hostapd/src/src/ap/ucode.c
+@@ -800,7 +800,7 @@ uc_hostapd_bss_rename(uc_vm_t *vm, size_t nargs)
+ 	char prev_ifname[IFNAMSIZ + 1];
+ 	struct sta_info *sta;
+ 	const char *ifname;
+-	int ret;
++	int ret = 0;
+ 
+ 	if (!hapd || ucv_type(ifname_arg) != UC_STRING)
+ 		return NULL;

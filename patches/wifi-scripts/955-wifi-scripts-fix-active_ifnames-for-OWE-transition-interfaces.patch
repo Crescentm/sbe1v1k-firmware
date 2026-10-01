@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alexander Astrovsky <astrouski@google.com>
+Date: Mon, 17 Aug 2026 10:30:14 +0000
+Subject: [PATCH] wifi-scripts: fix active_ifnames for OWE transition
+ interfaces
+
+Previously, during the OWE transition setup, the base interface name
+was mistakenly pushed to the active_ifnames array twice due to a
+copy/paste slip. Because this array is now passed directly as the
+keep_devices argument to the wdev.uc set_config call, the newly
+allocated OWE transition interface was completely missing from the
+keep list.
+
+This meant the transition interface never reached keep_devices and
+could be incorrectly orphaned or removed during a reload. Update the
+array push statement to use owe_transition_ifname so the correct
+interface is preserved.
+
+Signed-off-by: Alexander Astrovsky <astrouski@google.com>
+Link: https://github.com/openwrt/openwrt/pull/24621
+[Crescentm: from OpenWrt PR #24621 head 2589982754991c4af392e2b4e414550cd86bcca1, commit 2589982754991c4af392e2b4e414550cd86bcca1]
+---
+ files-ucode/lib/netifd/wireless/mac80211.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/files-ucode/lib/netifd/wireless/mac80211.sh b/files-ucode/lib/netifd/wireless/mac80211.sh
+index 9c2e9261..8b1d3524 100755
+--- a/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -243,7 +243,7 @@ function setup() {
+ 		if (v.config.encryption == 'owe' && v.config.owe_transition) {
+ 			mode_idx = idx[mode]++;
+ 			v.config.owe_transition_ifname = data.ifname_prefix + mode + mode_idx;
+-			push(active_ifnames, v.config.ifname);
++			push(active_ifnames, v.config.owe_transition_ifname);
+ 		}
+ 
+ 		switch (mode) {

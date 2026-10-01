@@ -1,0 +1,33 @@
+From 0605d9ddc15a421b6ef57e0ff9e353fd0b76e898 Mon Sep 17 00:00:00 2001
+From: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+Date: Wed, 9 Sep 2026 12:39:28 +0300
+Subject: [PATCH] SAE: Make sure the needed state is available in
+ sae_write_confirm()
+
+It might be possible for the scalars/elements not be present under
+certain error conditions, so check for that explicitly.
+
+Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
+(cherry picked from commit 0605d9ddc15a421b6ef57e0ff9e353fd0b76e898)
+---
+ src/common/sae.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/common/sae.c b/src/common/sae.c
+index 9dfe9f476..cfd68f190 100644
+--- a/src/common/sae.c
++++ b/src/common/sae.c
+@@ -2408,8 +2408,12 @@ int sae_write_confirm(struct sae_data *sae, struct wpabuf *buf)
+ 	size_t hash_len;
+ 	int res;
+ 
+-	if (sae->tmp == NULL)
++	if (!sae->tmp || !sae->tmp->own_commit_scalar ||
++	    !sae->peer_commit_scalar) {
++		wpa_printf(MSG_INFO, "%s: No own/peer scalar available",
++			   __func__);
+ 		return -1;
++	}
+ 
+ 	hash_len = sae->tmp->kck_len;
+ 
