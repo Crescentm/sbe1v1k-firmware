@@ -452,7 +452,7 @@ last four months. "clean" means the upstream diff applied unchanged.
 
 ### Removal checks (full re-apply with `patch -F0` each time)
 
-- Each of 970–978, 982–985 can be deleted on its own (some later patches then
+- Each of 970–978, 982–986 can be deleted on its own (986 together with 943) (some later patches then
   apply with an offset, never with fuzz), except: 975 → 976 → 977 as in
   round 1; 982 should keep 983.
 - All of 970–985 can be deleted together.
@@ -658,11 +658,15 @@ or was traced as equivalent. Changes made:
   is not merged upstream.
 - **ath12k 983:** when the hw is off during a crash, reconfig_complete
   never runs, so `is_reset`/`reset_count` stayed set and every later
-  crash waited 20 s and counted as failed; 983 now does that bookkeeping.
-- **ath12k 943:** the hw_scan abort and remove_interface paths now also
-  cancel `scan.timeout`.
-- **subsys 970:** also drops mesh peering action frames and probe
-  requests received on another radio's channel, not only beacons.
+  crash waited 20 s and counted as failed; 983 now does that bookkeeping
+  when the hw is started again (a crash before that start still waits).
+- **ath12k 986 (new, own, requires 943):** the hw_scan abort and
+  remove_interface paths now also cancel `scan.timeout`. Kept separate
+  from 943 because 945 uses those lines as context.
+- **subsys 970:** also drops mesh action frames and probe requests
+  received on another radio's channel (`ieee80211_mesh_rx_queued_mgmt()`),
+  and, for user MPM (wpa_supplicant), peering Open/Confirm/Close frames
+  in `ieee80211_rx_h_action()` before they reach user space.
 - **wifi-scripts 952:** TKIP is removed from `wpa_pairwise` on 6 GHz, so
   `psk2+tkip` style configs come up as well.
 - **Notes corrected:** subsys 980 does not break dynamic VLAN on an MLD.
