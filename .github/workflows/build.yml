@@ -46,7 +46,10 @@ jobs:
       - name: Fetch ImmortalWrt
         run: |
           git clone --filter=blob:none https://github.com/immortalwrt/immortalwrt.git "$SRC"
-          git -C "$SRC" checkout -q "${{ inputs.immortalwrt_ref || 'master' }}"
+          # A local branch that tracks master lets getver.sh number a pinned
+          # commit (r41676-...) instead of calling it r0+41676.
+          git -C "$SRC" checkout -q -B build "${{ inputs.immortalwrt_ref || 'master' }}"
+          git -C "$SRC" branch -q -u origin/master build
           cd "$SRC"
           ./scripts/feeds update -a
           ./scripts/feeds install -a
