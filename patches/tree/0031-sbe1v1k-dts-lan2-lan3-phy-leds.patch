@@ -1,0 +1,97 @@
+sbe1v1k: dts: describe the lan2/lan3 PHY LEDs (test)
+
+Every port has two LEDs. lan2 and lan3 sit on the QCA8075 (PHYs 0x12
+and 0x13), whose LED pins Linux leaves at the chip defaults today: at
+1G both LEDs blink together. Describe them so qca807x registers them
+and netdev rules can be offloaded to the PHY; the rules are set in
+board.d/01_leds (green: 1G, yellow: 100M/10M, both blink on activity).
+
+The stock QSDK 12.5 device tree has led_source@3/@6/@9 (mode "normal",
+speed "all", blink enabled, active "high"). The SSDK maps a source to
+port source / 3 + 1 and pin source % 3 (fal_led.c), so those are pin 0
+of SSDK ports 2-4, i.e. PHYs 0x11-0x13; lan2 and lan3 are 0x12 and
+0x13 here (0x11 is unused on this board). On QCA8075 (malibu_phy.c)
+pin 0 is LED_100N (MMD7 0x8074) and pin 1 LED_1000N (0x8076), the same
+registers qca807x uses for LED index 0 and 1.
+
+Differences from the lan1 (QCA8081) nodes, on purpose:
+ - led@0/led@1, not led@0/led@2: qca807x only accepts index 0 and 1
+   and rejects anything else with -EINVAL;
+ - no active-low/active-high: qca807x has no led_polarity_set, so
+   either property makes of_phy_led() fail with -EINVAL, which fails
+   the PHY probe and with it PPE ports 3 and 4. The pins keep the
+   chip's polarity, which already lights them on link today.
+
+Which colour is on which pin is not confirmed: if the board shows them
+the other way round, swap LED_COLOR_ID_YELLOW and LED_COLOR_ID_GREEN
+in both nodes (the 01_leds names follow the colour).
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+
+diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+index baab57c524..caa5cf24c6 100644
+--- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
++++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+@@ -571,11 +571,62 @@
+ 		qca8075_18: ethernet-phy@18 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";
+ 			reg = <18>;
++
++			/*
++			 * lan2 port LEDs. qca807x drives two LED pins per
++			 * PHY: reg 0 is the LED_100N pin (MMD7 0x8074, the one the
++			 * stock SSDK programs), reg 1 the LED_1000N pin (0x8076).
++			 * The colour per pin is not confirmed yet: swap the two
++			 * colors if the board shows them the other way round.
++			 * No active-low/active-high here: qca807x has no
++			 * led_polarity_set, and with either property the PHY
++			 * would fail to probe.
++			 */
++			leds {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				led@0 {
++					reg = <0>;
++					color = <LED_COLOR_ID_YELLOW>;
++					default-state = "keep";
++					function = LED_FUNCTION_LAN;
++				};
++
++				led@1 {
++					reg = <1>;
++					color = <LED_COLOR_ID_GREEN>;
++					default-state = "keep";
++					function = LED_FUNCTION_LAN;
++				};
++			};
+ 		};
+ 
+ 		qca8075_19: ethernet-phy@19 {
+ 			compatible = "ethernet-phy-ieee802.3-c22";
+ 			reg = <19>;
++
++			/*
++			 * lan3 port LEDs, wired like lan2.
++			 */
++			leds {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				led@0 {
++					reg = <0>;
++					color = <LED_COLOR_ID_YELLOW>;
++					default-state = "keep";
++					function = LED_FUNCTION_LAN;
++				};
++
++				led@1 {
++					reg = <1>;
++					color = <LED_COLOR_ID_GREEN>;
++					default-state = "keep";
++					function = LED_FUNCTION_LAN;
++				};
++			};
+ 		};
+ 	};
+ 

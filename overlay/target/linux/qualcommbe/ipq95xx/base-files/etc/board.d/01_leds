@@ -19,6 +19,18 @@ askey,sbe1v1k)
 		"90000.mdio-1:1c:green:lan" "lan1" "link_2500 link_1000 tx rx"
 	ucidef_set_led_netdev "lan1_yellow" "lan1:yellow" \
 		"90000.mdio-1:1c:yellow:lan" "lan1" "link_1000 link_100 tx rx"
+	# lan2/lan3, QCA8075 (1G); the netdev rules are offloaded to the
+	# PHY (qca807x does link_10/100/1000, tx and rx in hardware)
+	#   1G      : green on, blinks with activity
+	#   100M/10M: yellow on, blinks with activity
+	ucidef_set_led_netdev "lan2_green" "lan2:green" \
+		"90000.mdio-1:12:green:lan" "lan2" "link_1000 tx rx"
+	ucidef_set_led_netdev "lan2_yellow" "lan2:yellow" \
+		"90000.mdio-1:12:yellow:lan" "lan2" "link_100 link_10 tx rx"
+	ucidef_set_led_netdev "lan3_green" "lan3:green" \
+		"90000.mdio-1:13:green:lan" "lan3" "link_1000 tx rx"
+	ucidef_set_led_netdev "lan3_yellow" "lan3:yellow" \
+		"90000.mdio-1:13:yellow:lan" "lan3" "link_100 link_10 tx rx"
 	# wan, RTL8261BE (10G); needs the RTL826x PHY LED support
 	#   10G/5G/2.5G: green on, blinks with activity
 	#   1G/100M    : amber on, blinks with activity
