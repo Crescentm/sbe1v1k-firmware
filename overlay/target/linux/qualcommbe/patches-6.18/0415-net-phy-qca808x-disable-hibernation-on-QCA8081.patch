@@ -1,0 +1,39 @@
+From: Crescentm <guyues@outlook.com>
+Date: Wed, 1 Oct 2026 14:00:00 +0800
+Subject: [PATCH] net: phy: qca808x: disable hibernation on QCA8081
+
+The QCA8081 comes out of reset with hibernation enabled
+(QCA808X_DBG_AN_TEST bit 15): about 10s after the cable is removed it
+powers itself down and only wakes up again on link pulses from a
+partner. The driver already clears this bit for the duration of a cable
+test, but otherwise leaves it enabled.
+
+On AR803x PHYs the same feature also stops the clock towards the MAC,
+which is why the at803x driver lets boards turn it off
+("qca,disable-hibernation-mode"). Turn it off on QCA8081 in
+config_init(), which also runs again after every soft reset and resume,
+so the PHY and its SerDes link to the PCS stay up while the port has no
+cable. This costs some idle power on an unplugged port.
+
+QCA8084 has its own config_init() and is not affected.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/phy/qcom/qca808x.c
++++ b/drivers/net/phy/qcom/qca808x.c
+@@ -434,6 +434,15 @@ static int qca808x_config_init(struct ph
+ 	if (ret)
+ 		return ret;
+ 
++	/* Hibernation is enabled after reset and powers the PHY down about
++	 * 10s after the cable is removed. Keep it disabled; the cable test
++	 * clears the same bit.
++	 */
++	ret = at803x_debug_reg_mask(phydev, QCA808X_DBG_AN_TEST,
++				    QCA808X_HIBERNATION_EN, 0);
++	if (ret < 0)
++		return ret;
++
+ 	/* Configure adc threshold as 100mv for the link 10M */
+ 	return at803x_debug_reg_mask(phydev, QCA808X_PHY_DEBUG_ADC_THRESHOLD,
+ 				     QCA808X_ADC_THRESHOLD_MASK,
