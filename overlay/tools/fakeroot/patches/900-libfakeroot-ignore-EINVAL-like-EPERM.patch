@@ -1,0 +1,82 @@
+From: SBE1V1K firmware <noreply@localhost>
+Subject: [PATCH] libfakeroot: ignore EINVAL from chown like EPERM
+
+In a user namespace that only maps the build user (e.g. Nix buildFHSEnv /
+bubblewrap), chown() to an unmapped id such as root fails with EINVAL rather
+than EPERM. fakeroot only swallowed EPERM, so apk saw the error and refused
+to build the rootfs ("failed to preserve ...: owner").
+
+--- a/libfakeroot.c
++++ b/libfakeroot.c
+@@ -900,7 +900,7 @@
+     r=next_lchown(path,owner,group);
+   else
+     r=0;
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ 
+   return r;
+@@ -927,7 +927,7 @@
+     r=next_lchown(path,owner,group);
+   else
+     r=0;
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ 
+   return r;
+@@ -957,7 +957,7 @@
+   else
+     r=0;
+ 
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ 
+   return r;
+@@ -992,7 +992,7 @@
+   else
+     r=0;
+ 
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ 
+   return r;
+@@ -1030,7 +1030,7 @@
+     mode |= 0100;
+ 
+   r=next_chmod(path, mode);
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ #ifdef EFTYPE		/* available under FreeBSD kernel */
+   if(r&&(errno==EFTYPE))
+@@ -1063,7 +1063,7 @@
+     mode |= 0100;
+ 
+   r=next_lchmod(path, mode);
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ #ifdef EFTYPE		/* available under FreeBSD kernel */
+   if(r&&(errno==EFTYPE))
+@@ -1097,7 +1097,7 @@
+     mode |= 0100;
+ 
+   r=next_fchmod(fd, mode);
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ #ifdef EFTYPE		/* available under FreeBSD kernel */
+   if(r&&(errno==EFTYPE))
+@@ -1131,7 +1131,7 @@
+   if(!(r&&(errno==EOPNOTSUPP)))
+     INT_SEND_STAT(&st,chmod_func);
+ 
+-  if(r&&(errno==EPERM))
++  if(r&&(errno==EPERM||errno==EINVAL))
+     r=0;
+ #ifdef EFTYPE		/* available under FreeBSD kernel */
+   if(r&&(errno==EFTYPE))

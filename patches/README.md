@@ -4,7 +4,8 @@
 
 | Directory | Applied how | Contents |
 |---|---|---|
-| `tree/` | `git apply` at the tree root | sysupgrade on the "large" GPT, DTS fixes (cpufreq/regulators, QCE, QCA8075 TX level), a host fakeroot fix for user namespaces |
+| `../overlay/` | copied into the tree as is | new files, e.g. kernel and package patches (a host fakeroot fix for user namespaces) |
+| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, DTS fixes (cpufreq/regulators, QCE, QCA8075 TX level) |
 | `mac80211/` | copied to `package/kernel/mac80211/patches/ath12k/` | ath12k fixes for the tri-radio WSI setup and per-radio MACs |
 | `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, SAE on 6 GHz |
 

@@ -36,6 +36,14 @@ git reset -q --hard
 git clean -q -fd -- target package include scripts config tools toolchain
 rm -rf files
 
+# overlay/ holds files added to the tree verbatim (new kernel or package
+# patches); patches/tree/ changes files the tree already has.
+if [ -d "$REPO/overlay" ]; then
+	log "copying overlay"
+	cp -a "$REPO/overlay/." .
+	(cd "$REPO/overlay" && find . -type f | sed 's#^\./#    #' | sort)
+fi
+
 log "applying tree patches"
 for p in "$REPO"/patches/tree/*.patch; do
 	[ -e "$p" ] || continue
