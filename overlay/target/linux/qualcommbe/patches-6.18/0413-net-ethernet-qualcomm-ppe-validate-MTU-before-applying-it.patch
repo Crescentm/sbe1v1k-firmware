@@ -1,0 +1,95 @@
+From: Crescentm <guyues@outlook.com>
+Date: Wed, 1 Oct 2026 14:00:00 +0800
+Subject: [PATCH] net: ethernet: qualcomm: ppe: validate MTU before applying it
+
+edma_port_change_mtu() stored the new MTU in the net device before
+ppe_port_set_maxframe() had checked it. When the hardware rejected the
+value the call failed, but the net device kept reporting, and the stack
+kept using, an MTU the MAC drops frames for.
+
+The advertised range was also wrong: max_mtu was ETH_MAX_MTU (65535),
+while ppe_port_set_maxframe() only accepts an MTU whose frame, MTU plus
+ETH_HLEN plus the FCS, fits PPE_PORT_MAC_MAX_FRAME_SIZE (0x3000). Any
+MTU above 12270 passed the core's range check and then failed in the
+driver.
+
+Program the hardware first and only then update netdev->mtu, with
+WRITE_ONCE() as the core expects. Move PPE_PORT_MAC_MAX_FRAME_SIZE to
+ppe_port.h and advertise the real maximum, 0x3000 - ETH_HLEN -
+ETH_FCS_LEN = 12270, so out-of-range values are refused by the core with
+a proper extack message.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/ethernet/qualcomm/ppe/edma_port.c
++++ b/drivers/net/ethernet/qualcomm/ppe/edma_port.c
+@@ -168,13 +168,19 @@ static int edma_port_ioctl(struct net_de
+ static int edma_port_change_mtu(struct net_device *netdev, int mtu)
+ {
+ 	struct edma_port_priv *port_priv = (struct edma_port_priv *)netdev_priv(netdev);
++	int ret;
+ 
+ 	if (!port_priv)
+ 		return -EINVAL;
+ 
+-	netdev->mtu = mtu;
++	/* Only commit the MTU once the hardware has accepted it */
++	ret = ppe_port_set_maxframe(port_priv->ppe_port, mtu);
++	if (ret)
++		return ret;
++
++	WRITE_ONCE(netdev->mtu, mtu);
+ 
+-	return ppe_port_set_maxframe(port_priv->ppe_port, mtu);
++	return 0;
+ }
+ 
+ static netdev_features_t edma_port_feature_check(__maybe_unused struct sk_buff *skb,
+@@ -385,8 +391,10 @@ int edma_port_setup(struct ppe_port *por
+ 	SET_NETDEV_DEV(netdev, ppe_dev->dev);
+ 	netdev->dev.of_node = np;
+ 
+-	/* max_mtu is set to 1500 in ether_setup(). */
+-	netdev->max_mtu = ETH_MAX_MTU;
++	/* max_mtu is set to 1500 in ether_setup(). The MAC limits the
++	 * frame, header and FCS included, to PPE_PORT_MAC_MAX_FRAME_SIZE.
++	 */
++	netdev->max_mtu = PPE_PORT_MAX_MTU;
+ 
+ 	port_priv = netdev_priv(netdev);
+ 	memset((void *)port_priv, 0, sizeof(struct edma_port_priv));
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
+@@ -19,9 +19,6 @@
+ #include "ppe_port.h"
+ #include "ppe_regs.h"
+ 
+-/* PPE MAC max frame size which including 4bytes FCS */
+-#define PPE_PORT_MAC_MAX_FRAME_SIZE		0x3000
+-
+ /* PPE BM port start for PPE MAC ports */
+ #define PPE_BM_PORT_MAC_START			7
+ 
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_port.h
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_port.h
+@@ -7,6 +7,7 @@
+ #define __PPE_PORT_H__
+ 
+ #include <linux/compiler.h>
++#include <linux/if_ether.h>
+ #include <linux/phy.h>
+ #include <linux/phylink.h>
+ 
+@@ -18,6 +19,12 @@ struct rtnl_link_stats64;
+ 
+ struct ppe_device;
+ 
++/* PPE MAC max frame size which including 4bytes FCS */
++#define PPE_PORT_MAC_MAX_FRAME_SIZE		0x3000
++
++/* Largest MTU accepted by ppe_port_set_maxframe() */
++#define PPE_PORT_MAX_MTU	(PPE_PORT_MAC_MAX_FRAME_SIZE - ETH_HLEN - ETH_FCS_LEN)
++
+ /**
+  * enum ppe_port_clk_rst_type - PPE port clock and reset ID type
+  * @PPE_PORT_CLK_RST_MAC: The clock and reset ID for port MAC

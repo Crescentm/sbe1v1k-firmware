@@ -1,0 +1,199 @@
+From: Crescentm <guyues@outlook.com>
+Date: Wed, 1 Oct 2026 14:00:00 +0800
+Subject: [PATCH] net: ethernet: qualcomm: ppe: track NAPI enable state
+
+napi_disable() on a NAPI instance that is already disabled, or that was
+added but never enabled, never returns: it waits for NAPI_STATE_SCHED to
+clear, and a disabled instance keeps that bit set. The EDMA code reaches
+this in several places:
+
+ - edma_hw_configure() error path and edma_destroy() call
+   edma_cfg_rx_napi_disable() and then edma_cfg_rx_napi_delete(), which
+   disables every Rx NAPI a second time.
+ - edma_port_destroy() deletes the Tx completion NAPIs with another
+   napi_disable(), although edma_port_close() already disabled them if
+   the port was ever brought up and down, and they were never enabled if
+   the port was never opened.
+ - edma_port_setup() error path deletes Tx NAPIs that were added but
+   never enabled.
+
+Any of these hangs with RTNL held (probe failure, module removal).
+
+Record per ring whether its NAPI is enabled and make enable, disable and
+delete act on that state instead of calling napi_enable()/napi_disable()
+unconditionally. This is clearer than testing NAPI_STATE_SCHED, which is
+also set while a poll is scheduled on an enabled instance.
+
+edma_port_destroy() also tore the port down in the wrong order: it
+deleted the Tx NAPIs, disabled the Tx rings and freed the per-CPU stats
+while the net device was still registered and possibly running, and
+destroyed phylink after free_netdev() although phylink holds a pointer to
+the net device. Unregister the net device first, so ndo_stop runs while
+everything still exists, then destroy phylink, the rings and the stats,
+and free the net device last.
+
+The hang was reported, and first worked around with a NAPI_STATE_SCHED
+test, by Timofey Maykov in OpenWrt PR #24209 (Xiaomi BE7000 support,
+"0900-net-qcom-ppe-fix-napi-disable-hang").
+
+Reported-by: Timofey Maykov <itnitro@gmail.com>
+Closes: https://github.com/openwrt/openwrt/pull/24209
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/ethernet/qualcomm/ppe/edma_cfg_rx.c
++++ b/drivers/net/ethernet/qualcomm/ppe/edma_cfg_rx.c
+@@ -899,10 +899,11 @@ void edma_cfg_rx_napi_disable(void)
+ 
+ 		rxdesc_ring = &edma_ctx->rx_rings[i];
+ 
+-		if (!rxdesc_ring->napi_added)
++		if (!rxdesc_ring->napi_added || !rxdesc_ring->napi_enabled)
+ 			continue;
+ 
+ 		napi_disable(&rxdesc_ring->napi);
++		rxdesc_ring->napi_enabled = false;
+ 	}
+ }
+ 
+@@ -922,10 +923,11 @@ void edma_cfg_rx_napi_enable(void)
+ 
+ 		rxdesc_ring = &edma_ctx->rx_rings[i];
+ 
+-		if (!rxdesc_ring->napi_added)
++		if (!rxdesc_ring->napi_added || rxdesc_ring->napi_enabled)
+ 			continue;
+ 
+ 		napi_enable(&rxdesc_ring->napi);
++		rxdesc_ring->napi_enabled = true;
+ 	}
+ }
+ 
+@@ -948,7 +950,12 @@ void edma_cfg_rx_napi_delete(void)
+ 		if (!rxdesc_ring->napi_added)
+ 			continue;
+ 
+-		napi_disable(&rxdesc_ring->napi);
++		/* napi_disable() on a NAPI that is not enabled never returns */
++		if (rxdesc_ring->napi_enabled) {
++			napi_disable(&rxdesc_ring->napi);
++			rxdesc_ring->napi_enabled = false;
++		}
++
+ 		netif_napi_del(&rxdesc_ring->napi);
+ 		rxdesc_ring->napi_added = false;
+ 	}
+@@ -980,6 +987,7 @@ void edma_cfg_rx_napi_add(void)
+ 		netif_napi_add_weight(edma_ctx->dummy_dev, &rxdesc_ring->napi,
+ 				      edma_rx_napi_poll, edma_rx_napi_budget);
+ 		rxdesc_ring->napi_added = true;
++		rxdesc_ring->napi_enabled = false;
+ 	}
+ 
+ 	netdev_dbg(edma_ctx->dummy_dev, "Rx NAPI budget: %d\n", edma_rx_napi_budget);
+--- a/drivers/net/ethernet/qualcomm/ppe/edma_cfg_tx.c
++++ b/drivers/net/ethernet/qualcomm/ppe/edma_cfg_tx.c
+@@ -586,10 +586,11 @@ void edma_cfg_tx_napi_enable(u32 port_id
+ 	for_each_possible_cpu(i) {
+ 		ring_idx = ((port_id - 1) * num_possible_cpus()) + i;
+ 		txcmpl_ring = &edma_ctx->txcmpl_rings[ring_idx];
+-		if (!txcmpl_ring->napi_added)
++		if (!txcmpl_ring->napi_added || txcmpl_ring->napi_enabled)
+ 			continue;
+ 
+ 		napi_enable(&txcmpl_ring->napi);
++		txcmpl_ring->napi_enabled = true;
+ 	}
+ }
+ 
+@@ -608,10 +609,11 @@ void edma_cfg_tx_napi_disable(u32 port_i
+ 	for_each_possible_cpu(i) {
+ 		ring_idx = ((port_id - 1) * num_possible_cpus()) + i;
+ 		txcmpl_ring = &edma_ctx->txcmpl_rings[ring_idx];
+-		if (!txcmpl_ring->napi_added)
++		if (!txcmpl_ring->napi_added || !txcmpl_ring->napi_enabled)
+ 			continue;
+ 
+ 		napi_disable(&txcmpl_ring->napi);
++		txcmpl_ring->napi_enabled = false;
+ 	}
+ }
+ 
+@@ -633,7 +635,12 @@ void edma_cfg_tx_napi_delete(u32 port_id
+ 		if (!txcmpl_ring->napi_added)
+ 			continue;
+ 
+-		napi_disable(&txcmpl_ring->napi);
++		/* napi_disable() on a NAPI that is not enabled never returns */
++		if (txcmpl_ring->napi_enabled) {
++			napi_disable(&txcmpl_ring->napi);
++			txcmpl_ring->napi_enabled = false;
++		}
++
+ 		netif_napi_del(&txcmpl_ring->napi);
+ 		txcmpl_ring->napi_added = false;
+ 	}
+@@ -666,6 +673,7 @@ void edma_cfg_tx_napi_add(struct net_dev
+ 		netif_napi_add_weight(netdev, &txcmpl_ring->napi,
+ 				      edma_tx_napi_poll, edma_tx_napi_budget);
+ 		txcmpl_ring->napi_added = true;
++		txcmpl_ring->napi_enabled = false;
+ 		netdev_dbg(netdev, "Napi added for Tx cmpl ring: %u\n", txcmpl_ring->id);
+ 	}
+ 
+--- a/drivers/net/ethernet/qualcomm/ppe/edma_port.c
++++ b/drivers/net/ethernet/qualcomm/ppe/edma_port.c
+@@ -333,12 +333,15 @@ void edma_port_destroy(struct ppe_port *
+ 	int port_id = port->port_id;
+ 	struct net_device *netdev = edma_ctx->netdev_arr[port_id - 1];
+ 
+-	edma_port_deconfigure(netdev);
+-	edma_port_stats_free(netdev);
++	/* Unregister first: it stops the port (ndo_stop) while its rings,
++	 * NAPI and stats still exist, and nothing can transmit afterwards.
++	 */
+ 	unregister_netdev(netdev);
+-	free_netdev(netdev);
+ 	ppe_port_phylink_destroy(port);
++	edma_port_deconfigure(netdev);
++	edma_port_stats_free(netdev);
+ 	edma_ctx->netdev_arr[port_id - 1] = NULL;
++	free_netdev(netdev);
+ }
+ 
+ /**
+--- a/drivers/net/ethernet/qualcomm/ppe/edma_rx.h
++++ b/drivers/net/ethernet/qualcomm/ppe/edma_rx.h
+@@ -260,6 +260,7 @@ struct edma_rxfill_ring {
+  * @rxdesc_stats: Rx descriptor ring statistics
+  * @rxfill: RxFill ring used
+  * @napi_added: Flag to indicate NAPI add status
++ * @napi_enabled: Flag to indicate NAPI enable status
+  * @pdma: Primary descriptor ring physical address
+  * @sdma: Secondary descriptor ring physical address
+  * @head: Head of the skb list in case of scatter-gather frame
+@@ -277,6 +278,7 @@ struct edma_rxdesc_ring {
+ 	struct edma_rxdesc_stats rxdesc_stats;
+ 	struct edma_rxfill_ring *rxfill;
+ 	bool napi_added;
++	bool napi_enabled;
+ 	dma_addr_t pdma;
+ 	dma_addr_t sdma;
+ 	struct sk_buff *head;
+--- a/drivers/net/ethernet/qualcomm/ppe/edma_tx.h
++++ b/drivers/net/ethernet/qualcomm/ppe/edma_tx.h
+@@ -275,6 +275,7 @@ struct edma_txdesc_ring {
+  * @dma: Descriptor ring physical address
+  * @count: Number of descriptors in the ring
+  * @napi_added: Flag to indicate NAPI add status
++ * @napi_enabled: Flag to indicate NAPI enable status
+  */
+ struct edma_txcmpl_ring {
+ 	struct napi_struct napi;
+@@ -286,6 +287,7 @@ struct edma_txcmpl_ring {
+ 	dma_addr_t dma;
+ 	u32 count;
+ 	bool napi_added;
++	bool napi_enabled;
+ };
+ 
+ extern int edma_tx_napi_budget;

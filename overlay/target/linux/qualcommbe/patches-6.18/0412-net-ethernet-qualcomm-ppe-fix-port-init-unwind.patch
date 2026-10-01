@@ -1,0 +1,99 @@
+From: Timofey Maykov <itnitro@gmail.com>
+Date: Wed, 1 Oct 2026 14:00:00 +0800
+Subject: [PATCH] net: ethernet: qualcomm: ppe: fix port init error unwind
+
+When edma_port_setup() failed, ppe_port_mac_init() decremented i and
+then looped 'while (i >= 0)', leaving i at -1. The following
+'while (i)' loop in err_port_clk is true for -1, so it went on to
+release the clocks of port[-2], port[-3], ... and oopsed on a garbage
+pointer. The port whose EDMA setup failed also kept its clocks.
+
+The other error paths were incomplete as well: a failure to read a
+port's "reg" or phy-mode, to get its clocks or to initialise its MAC
+returned without destroying the EDMA ports already set up (and, except
+for the clock failure, without releasing their clocks). That left
+registered net devices pointing into the devm-allocated ppe_ports array
+of a failed probe.
+
+Unwind in one place: release the clocks of the port that failed, if it
+got them, then destroy the EDMA port and release the clocks of every
+port set up before it. 'i' never goes negative.
+
+Link: https://github.com/openwrt/openwrt/pull/24209
+Signed-off-by: Timofey Maykov <itnitro@gmail.com>
+[Crescentm: also unwind after DT, clock and MAC init failures; reword]
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
++++ b/drivers/net/ethernet/qualcomm/ppe/ppe_port.c
+@@ -1367,13 +1367,13 @@ int ppe_port_mac_init(struct ppe_device
+ 		ret = of_property_read_u32(port_node, "reg", &port);
+ 		if (ret) {
+ 			dev_err(ppe_dev->dev, "Failed to get port id\n");
+-			goto err_port_node;
++			goto err_port_unwind;
+ 		}
+ 
+ 		ret = of_get_phy_mode(port_node, &phy_mode);
+ 		if (ret) {
+ 			dev_err(ppe_dev->dev, "Failed to get phy mode\n");
+-			goto err_port_node;
++			goto err_port_unwind;
+ 		}
+ 
+ 		ppe_ports->port[i].ppe_dev = ppe_dev;
+@@ -1382,23 +1382,23 @@ int ppe_port_mac_init(struct ppe_device
+ 		ppe_ports->port[i].interface = phy_mode;
+ 		ppe_ports->port[i].mac_type = PPE_MAC_TYPE_GMAC;
+ 
++		/* ppe_port_clock_init() releases what it took on failure */
+ 		ret = ppe_port_clock_init(&ppe_ports->port[i]);
+ 		if (ret) {
+ 			dev_err(ppe_dev->dev, "Failed to initialize port clocks\n");
+-			goto err_port_clk;
++			goto err_port_unwind;
+ 		}
+ 
+ 		ret = ppe_port_mac_hw_init(&ppe_ports->port[i]);
+ 		if (ret) {
+ 			dev_err(ppe_dev->dev, "Failed to initialize MAC hardware\n");
+-			goto err_port_node;
++			goto err_port_clk;
+ 		}
+ 
+ 		ret = edma_port_setup(&ppe_ports->port[i]);
+ 		if (ret) {
+ 			dev_err(ppe_dev->dev, "QCOM EDMA port setup failed\n");
+-			i--;
+-			goto err_port_setup;
++			goto err_port_clk;
+ 		}
+ 
+ 		i++;
+@@ -1407,20 +1407,17 @@ int ppe_port_mac_init(struct ppe_device
+ 	of_node_put(ports_node);
+ 	return 0;
+ 
+-err_port_setup:
+-	/* Destroy edma ports created till now */
+-	while (i >= 0) {
+-		edma_port_destroy(&ppe_ports->port[i]);
+-		i--;
+-	}
+-
+ err_port_clk:
+-	while (i) {
++	/* Port i got its clocks but no EDMA port */
++	ppe_port_clock_deinit(&ppe_ports->port[i]);
++err_port_unwind:
++	/* Ports 0..i-1 were fully set up */
++	while (i > 0) {
+ 		i--;
++		edma_port_destroy(&ppe_ports->port[i]);
+ 		ppe_port_clock_deinit(&ppe_ports->port[i]);
+ 	}
+ 
+-err_port_node:
+ 	of_node_put(port_node);
+ err_ports_node:
+ 	of_node_put(ports_node);
