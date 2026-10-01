@@ -1,0 +1,67 @@
+sbe1v1k: dts: fix the dtc warnings
+
+dtc warns about this board:
+
+  Warning (reg_format): /soc@0/mmc@7804000/card@0:reg: property has
+    invalid length (4 bytes) (#address-cells == 2, #size-cells == 1)
+  Warning (avoid_default_addr_size): .../card@0: Relying on default
+    #address-cells / #size-cells value
+
+and the failed reg_format check also disables the PCI checks, which
+hid two more:
+
+  Warning (pci_device_reg): /soc@0/pcie@18000000/pcie@0,0:reg: PCI reg
+    config space address cells 2 and 3 must be 0
+  Warning (pci_device_reg): /soc@0/pcie@20000000/pcie@0:reg: ...
+
+ - &sdhc_1 gets #address-cells = <1> and #size-cells = <0> for its
+   card@0 child, as in the MMC bindings.
+ - The pcie2/pcie3 root port nodes had 1 and 2 in the low address cell
+   of reg, apparently meant as a bus number. The root port is device 0,
+   function 0 on bus 0 of its own domain, so reg is all zeros as on
+   pcie1, and the pcie3 node is pcie@0 rather than pcie@0,0. Linux takes
+   the devfn from the first reg cell only, which was 0 already, so the
+   DT nodes still match the same root ports (and the wifi@0 nodes below
+   them).
+
+After this the board DTB builds without dtc warnings.
+
+Same changes as OneNAS-space/Askey_Spectrum_SBE1V1K b6fc7b1f43.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+
+diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+index baab57c524..b09811f4f4 100644
+--- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
++++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+@@ -249,6 +249,9 @@
+ 	pinctrl-names = "default";
+ 	status = "okay";
+ 
++	#address-cells = <1>;
++	#size-cells = <0>;
++
+ 	card@0 {
+ 		compatible = "mmc-card";
+ 		reg = <0>;
+@@ -690,7 +693,7 @@
+ 
+ 	pcie@0 {
+ 		device_type = "pci";
+-		reg = <0x0 0x0 0x1 0x0 0x0>;
++		reg = <0x0 0x0 0x0 0x0 0x0>;
+ 		#address-cells = <3>;
+ 		#size-cells = <2>;
+ 		ranges;
+@@ -743,9 +746,9 @@
+ 	wake-gpios = <&tlmm 33 GPIO_ACTIVE_LOW>;
+ 	status = "okay";
+ 
+-	pcie@0,0 {
++	pcie@0 {
+ 		device_type = "pci";
+-		reg = <0x0 0x0 0x2 0x0 0x0>;
++		reg = <0x0 0x0 0x0 0x0 0x0>;
+ 		#address-cells = <3>;
+ 		#size-cells = <2>;
+ 		ranges;

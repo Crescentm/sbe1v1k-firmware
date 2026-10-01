@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gabor Juhos <j4g8y7@gmail.com>
+Date: Tue, 16 Dec 2025 19:38:29 +0100
+Subject: [PATCH] regulator: qcom_smd: change MP5496 supply names
+
+In case of the MP5496 regulators, the driver uses the same name both for
+the regulator and for its supply. Due to this, in some cases the supply
+gets resolved to the regulator itself, and the regulator core code throwns
+an error message.
+
+For example, booting the kernel with the 'ipq9574-rdp433' device tree,
+results in the following message in the log:
+
+  [    1.710392] qcom_rpm_smd_regulator remoteproc:glink-edge:rpm-requests:regulators: Supply for s1 (s1) resolved to itself
+
+Additionally, the driver uses different supply names for the 's2' and for
+the 'l2' regulators which is incorrect. Here is the supply map based on the
+datasheet of the MP5496:
+
+  VIN1 -> Buck1
+  VIN2 -> Buck2, LDO2, LDO3
+  VIN3 -> Buck3
+  VIN4 -> Buck4
+  VIN5 -> LDO4, LDO5
+
+This indicates that both 's2' (Buck2) and 'l2' (LDO2) are connected
+to the same supply internally within the PMIC, so those should use
+the same supply name.
+
+Change the supply names according to the naming schema used by the other
+regulators in the same driver to fix the above problems.
+
+Although this breaks backward compatibility, but the risk of causing
+issues is quite low because none of the in-kernel device tree sources
+are defining supplies with the removed names.
+
+Fixes: ad663ce67804 ("regulator: qcom_smd: Add LDO5 MP5496 regulator")
+Fixes: 60bbee7db43b ("regulator: qcom_smd: Add MP5496 S1 regulator")
+Fixes: 47894c859479 ("regulator: qcom_smd: Add MP5496 regulators")
+Signed-off-by: Gabor Juhos <j4g8y7@gmail.com>
+Link: https://lore.kernel.org/r/20251216-qcom_smd-mp5496-supply-fix-v1-1-f9b5e70536de@gmail.com
+---
+ drivers/regulator/qcom_smd-regulator.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/regulator/qcom_smd-regulator.c b/drivers/regulator/qcom_smd-regulator.c
+index 25ed9f713..91bfea06b 100644
+--- a/drivers/regulator/qcom_smd-regulator.c
++++ b/drivers/regulator/qcom_smd-regulator.c
+@@ -792,10 +792,10 @@ struct rpm_regulator_data {
+ };
+ 
+ static const struct rpm_regulator_data rpm_mp5496_regulators[] = {
+-	{ "s1", QCOM_SMD_RPM_SMPA, 1, &mp5496_smps, "s1" },
+-	{ "s2", QCOM_SMD_RPM_SMPA, 2, &mp5496_smps, "s2" },
+-	{ "l2", QCOM_SMD_RPM_LDOA, 2, &mp5496_ldoa2, "l2" },
+-	{ "l5", QCOM_SMD_RPM_LDOA, 5, &mp5496_ldoa2, "l5" },
++	{ "s1", QCOM_SMD_RPM_SMPA, 1, &mp5496_smps, "vdd_s1" },
++	{ "s2", QCOM_SMD_RPM_SMPA, 2, &mp5496_smps, "vdd_s2_l2_l3" },
++	{ "l2", QCOM_SMD_RPM_LDOA, 2, &mp5496_ldoa2, "vdd_s2_l2_l3" },
++	{ "l5", QCOM_SMD_RPM_LDOA, 5, &mp5496_ldoa2, "vdd_l4_l5" },
+ 	{}
+ };
+ 

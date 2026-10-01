@@ -1,0 +1,41 @@
+From 5117ce8c35d1645e9839bc892b5944556faddb1c Mon Sep 17 00:00:00 2001
+From: Donggeun Yoo <donggeunyoo.kernel@gmail.com>
+Date: Wed, 16 Sep 2026 07:31:37 +0900
+Subject: [PATCH] net: phy: qca808x: accept the active-high LED polarity mode
+
+commit 5117ce8c35d1645e9839bc892b5944556faddb1c net-next (queued for v7.4).
+
+commit a274465cc3be ("net: phy: support 'active-high' property for PHY LEDs")
+added PHY_LED_ACTIVE_HIGH, but qca808x_led_polarity_set() still rejects
+everything except PHY_LED_ACTIVE_LOW. An LED node carrying 'active-high'
+therefore falls into the default case and returns -EINVAL, which
+phy_probe() propagates: the mdio device is left unbound and
+phy_attach_direct() falls back to the genphy driver, so the PHY loses
+every qca808x-specific feature, not just the LED.
+
+Accept the mode. The register write below already handles both
+polarities.
+
+Cc: stable+noautosel@kernel.org # never worked
+Signed-off-by: Donggeun Yoo <donggeunyoo.kernel@gmail.com>
+Reviewed-by: Christian Marangi <ansuelsmth@gmail.com>
+Link: https://patch.msgid.link/20260915223138.321307-2-donggeunyoo.kernel@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/phy/qcom/qca808x.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/net/phy/qcom/qca808x.c b/drivers/net/phy/qcom/qca808x.c
+index c851aeae8..4808f2fd1 100644
+--- a/drivers/net/phy/qcom/qca808x.c
++++ b/drivers/net/phy/qcom/qca808x.c
+@@ -827,6 +827,9 @@ static int qca808x_led_polarity_set(struct phy_device *phydev, int index,
+ 		case PHY_LED_ACTIVE_LOW:
+ 			active_low = true;
+ 			break;
++		case PHY_LED_ACTIVE_HIGH:
++			active_low = false;
++			break;
+ 		default:
+ 			return -EINVAL;
+ 		}

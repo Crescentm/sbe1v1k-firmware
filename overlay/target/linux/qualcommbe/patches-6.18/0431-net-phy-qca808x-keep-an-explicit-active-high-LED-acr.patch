@@ -1,0 +1,86 @@
+From f1b4766d67bb2d496eb74b0ecfe0dc55a9ab03e0 Mon Sep 17 00:00:00 2001
+From: Donggeun Yoo <donggeunyoo.kernel@gmail.com>
+Date: Wed, 16 Sep 2026 07:31:38 +0900
+Subject: [PATCH] net: phy: qca808x: keep an explicit active-high LED across
+ the reset
+
+commit f1b4766d67bb2d496eb74b0ecfe0dc55a9ab03e0 net-next (queued for v7.4).
+
+[ Context adapted for 6.18 + qualcommbe patches: the QCA808X_PHY_LED_UNSET
+  define is placed after QCA8084_PHY_ID and qca808x_probe() carries the
+  qcom,xpcs-channel parsing; no functional change vs. upstream. ]
+
+With the previous patch an 'active-high' LED node is accepted, so
+led_polarity_mode can now hold 0. qca808x_config_init() only re-asserts
+QCA808X_LED_ACTIVE_HIGH when the mode is -1, the value that means device
+tree asked for nothing, so an explicit active-high does not reach the
+register.
+
+That matters because the bit does not survive a reset. phy_init_hw() runs
+.soft_reset before .config_init on every attach and resume, and
+commit f203c8c77c76 ("net: phy: qcom: qca808x: default to LED active High if not set")
+records why: "on PHY reset, the Active High bit is not set resulting in
+the LED driven as active-low". The polarity written from device tree
+during phy_probe() is therefore gone by the time the link comes up, and
+the LED runs inverted.
+
+Re-assert the bit for anything other than an explicit active-low, which
+is the one case that wants it clear and gets that from the reset for
+free. Name the unset value while here: led_polarity_mode otherwise
+holds a PHY_LED_ACTIVE_* value, so spelling the comparison
+PHY_LED_ACTIVE_LOW says what it means where -1, 0 and 1 did not.
+
+Cc: stable+noautosel@kernel.org # never worked
+Closes: https://netdev-ai.bots.linux.dev/sashiko/#/patchset/20260908105959.70453-1-donggeunyoo.kernel%40gmail.com
+Signed-off-by: Donggeun Yoo <donggeunyoo.kernel@gmail.com>
+Reviewed-by: Christian Marangi <ansuelsmth@gmail.com>
+Link: https://patch.msgid.link/20260915223138.321307-3-donggeunyoo.kernel@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/phy/qcom/qca808x.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/phy/qcom/qca808x.c b/drivers/net/phy/qcom/qca808x.c
+index 4808f2fd1..28ca4882c 100644
+--- a/drivers/net/phy/qcom/qca808x.c
++++ b/drivers/net/phy/qcom/qca808x.c
+@@ -94,6 +94,9 @@
+ #define QCA8081_PHY_ID				0x004dd101
+ #define QCA8084_PHY_ID				0x004dd180
+ 
++/* led_polarity_mode otherwise holds a PHY_LED_ACTIVE_* value */
++#define QCA808X_PHY_LED_UNSET			-1
++
+ #define QCA8084_MMD3_CDT_PULSE_CTRL		0x8075
+ #define QCA8084_CDT_PULSE_THRESH_VAL		0xa060
+ 
+@@ -365,8 +368,7 @@ static int qca808x_probe(struct phy_device *phydev)
+ 	if (!priv)
+ 		return -ENOMEM;
+ 
+-	/* Init LED polarity mode to -1 */
+-	priv->led_polarity_mode = -1;
++	priv->led_polarity_mode = QCA808X_PHY_LED_UNSET;
+ 
+ 	/* DT property qcom,xpcs-channel" is optional and only available for
+ 	 * 10G-QXGMII mode.
+@@ -386,8 +388,8 @@ static int qca808x_config_init(struct phy_device *phydev)
+ 	struct qca808x_priv *priv = phydev->priv;
+ 	int ret;
+ 
+-	/* Default to LED Active High if active-low not in DT */
+-	if (priv->led_polarity_mode == -1) {
++	/* Set LED Active High unless active-low was requested in DT */
++	if (priv->led_polarity_mode != PHY_LED_ACTIVE_LOW) {
+ 		ret = phy_set_bits_mmd(phydev, MDIO_MMD_AN,
+ 				       QCA808X_MMD7_LED_POLARITY_CTRL,
+ 				       QCA808X_LED_ACTIVE_HIGH);
+@@ -839,7 +841,7 @@ static int qca808x_led_polarity_set(struct phy_device *phydev, int index,
+ 	 * To detect this, check if last requested polarity mode
+ 	 * match the new one.
+ 	 */
+-	if (priv->led_polarity_mode >= 0 &&
++	if (priv->led_polarity_mode != QCA808X_PHY_LED_UNSET &&
+ 	    priv->led_polarity_mode != active_low) {
+ 		phydev_err(phydev, "PHY polarity is global. Mismatched polarity on different LED\n");
+ 		return -EINVAL;
