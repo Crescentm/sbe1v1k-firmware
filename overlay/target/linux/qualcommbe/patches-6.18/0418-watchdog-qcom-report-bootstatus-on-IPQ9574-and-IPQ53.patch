@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Kathiravan Thirumoorthy <kathiravan.thirumoorthy@oss.qualcomm.com>
+Date: Tue, 28 Jul 2026 16:28:03 +0530
+Subject: [PATCH 418/420] watchdog: qcom: report bootstatus on IPQ9574 and
+ IPQ5332
+
+commit 6a393b0ea3cc3032ded9186d7a6d1f021911c84b upstream.
+
+Report bootstatus on IPQ5332 and IPQ9574. These SoCs use different
+restart-reason values from IPQ5424 for watchdog reset and powerunder
+reset events, so add separate match data for them and use it when
+decoding the restart reason.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Kathiravan Thirumoorthy <kathiravan.thirumoorthy@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260728-qcom_wdt_powerunder-v1-2-de8d9e964e7d@oss.qualcomm.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/qcom-wdt.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/watchdog/qcom-wdt.c b/drivers/watchdog/qcom-wdt.c
+index 8e1fa1347..a425902b9 100644
+--- a/drivers/watchdog/qcom-wdt.c
++++ b/drivers/watchdog/qcom-wdt.c
+@@ -194,6 +194,14 @@ static const struct qcom_wdt_match_data match_data_ipq5424 = {
+ 	.powerunder_reason_val = 1,
+ };
+ 
++static const struct qcom_wdt_match_data match_data_ipq9574 = {
++	.offset = reg_offset_data_kpss,
++	.pretimeout = true,
++	.max_tick_count = 0xFFFFFU,
++	.wdt_reason_val = 1,
++	.powerunder_reason_val = 32,
++};
++
+ static const struct qcom_wdt_match_data match_data_kpss = {
+ 	.offset = reg_offset_data_kpss,
+ 	.pretimeout = true,
+@@ -374,7 +382,9 @@ static const struct dev_pm_ops qcom_wdt_pm_ops = {
+ };
+ 
+ static const struct of_device_id qcom_wdt_of_table[] = {
++	{ .compatible = "qcom,apss-wdt-ipq5332", .data = &match_data_ipq9574 },
+ 	{ .compatible = "qcom,apss-wdt-ipq5424", .data = &match_data_ipq5424 },
++	{ .compatible = "qcom,apss-wdt-ipq9574", .data = &match_data_ipq9574 },
+ 	{ .compatible = "qcom,kpss-timer", .data = &match_data_apcs_tmr },
+ 	{ .compatible = "qcom,scss-timer", .data = &match_data_apcs_tmr },
+ 	{ .compatible = "qcom,kpss-wdt", .data = &match_data_kpss },

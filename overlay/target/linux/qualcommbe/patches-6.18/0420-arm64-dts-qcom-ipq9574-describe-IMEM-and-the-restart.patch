@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 14:48:14 +0800
+Subject: [PATCH 420/420] arm64: dts: qcom: ipq9574: describe IMEM and the
+ restart reason
+
+Add the IMEM (on-chip SRAM) node and point the watchdog at the restart
+reason word in it, so that qcom-wdt can report a watchdog reset in
+/sys/class/watchdog/watchdog0/bootstatus. The EXPIRED_STATUS bit in
+WDT_STS that the driver checks otherwise is already cleared when Linux
+boots.
+
+The IMEM node is Kathiravan Thirumoorthy's "arm64: dts: qcom: ipq9574:
+Add the IMEM node" (v3 5/6), unchanged. That series got "changes
+requested" for its binding (the reviewers want the IMEM binding posted
+complete, with its children), not for the node itself. The child node
+and the watchdog "sram" property follow his IPQ5424 patch, which is in
+linux-next ("arm64: dts: qcom: ipq5424: add support to get watchdog
+bootstatus from IMEM", v11 3/3).
+
+The offset is IPQ9574 specific: the QSDK 12.x ipq9574.dtsi describes
+the restart reason as "restart-reason-buf-addr@7a4" in the IMEM at
+0x08600000, and its qti_scm_restart_reason driver decodes 0x1 as a
+non-secure watchdog reset and 0x20 as a power-on reset. Those are the
+values that mainline commit 6a393b0ea3cc ("watchdog: qcom: report
+bootstatus on IPQ9574 and IPQ5332") uses for IPQ9574 (CARDRESET and
+POWERUNDER).
+
+Without the sram property the driver falls back to the old WDT_STS
+check, so dropping this patch restores the previous behaviour.
+
+Based on patches by Kathiravan Thirumoorthy
+<kathiravan.thirumoorthy@oss.qualcomm.com>.
+
+Link: https://lore.kernel.org/all/20260228-imem-v3-5-20fbcc1a9404@oss.qualcomm.com/
+Link: https://lore.kernel.org/all/20260727-wdt_reset_reason-v11-3-eeedb22beefe@oss.qualcomm.com/
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+ arch/arm64/boot/dts/qcom/ipq9574.dtsi | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/ipq9574.dtsi b/arch/arm64/boot/dts/qcom/ipq9574.dtsi
+index ad49949c0..20601b675 100644
+--- a/arch/arm64/boot/dts/qcom/ipq9574.dtsi
++++ b/arch/arm64/boot/dts/qcom/ipq9574.dtsi
+@@ -772,6 +772,21 @@ usb_0_qmpphy: usb-phy@7d000 {
+ 			status = "disabled";
+ 		};
+ 
++		sram@8600000 {
++			compatible = "qcom,ipq9574-imem", "mmio-sram";
++			reg = <0x08600000 0x8000>;
++			ranges = <0 0x08600000 0x8000>;
++
++			no-memory-wc;
++
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			restart_reason: restartreason-sram@7a4 {
++				reg = <0x7a4 0x4>;
++			};
++		};
++
+ 		usb3: usb@8af8800 {
+ 			compatible = "qcom,ipq9574-dwc3", "qcom,dwc3";
+ 			reg = <0x08af8800 0x400>;
+@@ -855,6 +870,7 @@ watchdog: watchdog@b017000 {
+ 			reg = <0x0b017000 0x1000>;
+ 			interrupts = <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>;
+ 			clocks = <&sleep_clk>;
++			sram = <&restart_reason>;
+ 			timeout-sec = <30>;
+ 		};
+ 

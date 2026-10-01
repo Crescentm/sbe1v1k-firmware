@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: bui duc phuc <phucduc.bui@gmail.com>
+Date: Mon, 10 Aug 2026 17:51:01 +0700
+Subject: [PATCH 419/420] watchdog: qcom: Propagate errors from optional IRQ
+ lookup
+
+commit 2bab791e56d977b9e4676ef284c00a11a272d61c upstream.
+
+platform_get_irq_optional() returns a positive IRQ number on success or
+a negative error code on failure. For an optional IRQ, -ENXIO indicates
+that no IRQ is available, while other errors should be propagated.
+
+Instead of only checking for -EPROBE_DEFER, propagate all error codes
+returned by platform_get_irq_optional() other than -ENXIO, so that
+failures are properly reported to the caller.
+
+Signed-off-by: bui duc phuc <phucduc.bui@gmail.com>
+Link: https://lore.kernel.org/r/20260810105101.55945-1-phucduc.bui@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/watchdog/qcom-wdt.c | 29 +++++++++++++++--------------
+ 1 file changed, 15 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/watchdog/qcom-wdt.c b/drivers/watchdog/qcom-wdt.c
+index a425902b9..4eb1bf979 100644
+--- a/drivers/watchdog/qcom-wdt.c
++++ b/drivers/watchdog/qcom-wdt.c
+@@ -303,21 +303,22 @@ static int qcom_wdt_probe(struct platform_device *pdev)
+ 		return -EINVAL;
+ 	}
+ 
++	wdt->wdd.info = &qcom_wdt_info;
++
+ 	/* check if there is pretimeout support */
+-	irq = platform_get_irq_optional(pdev, 0);
+-	if (data->pretimeout && irq > 0) {
+-		ret = devm_request_irq(dev, irq, qcom_wdt_isr, 0,
+-				       "wdt_bark", &wdt->wdd);
+-		if (ret)
+-			return ret;
+-
+-		wdt->wdd.info = &qcom_wdt_pt_info;
+-		wdt->wdd.pretimeout = 1;
+-	} else {
+-		if (irq == -EPROBE_DEFER)
+-			return -EPROBE_DEFER;
+-
+-		wdt->wdd.info = &qcom_wdt_info;
++	if (data->pretimeout) {
++		irq = platform_get_irq_optional(pdev, 0);
++		if (irq < 0 && irq != -ENXIO)
++			return irq;
++		if (irq > 0) {
++			ret = devm_request_irq(dev, irq, qcom_wdt_isr, 0,
++					       "wdt_bark", &wdt->wdd);
++			if (ret)
++				return ret;
++
++			wdt->wdd.info = &qcom_wdt_pt_info;
++			wdt->wdd.pretimeout = 1;
++		}
+ 	}
+ 
+ 	wdt->wdd.ops = &qcom_wdt_ops;
