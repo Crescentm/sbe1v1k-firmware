@@ -1,0 +1,40 @@
+From: Crescentm <guyues@outlook.com>
+Date: Thu, 1 Oct 2026 18:00:00 +0800
+Subject: [PATCH] wifi: ath12k: cancel scan timeout when dropping a scan vdev
+
+[ SBE1V1K: our addition on top of "wifi: ath12k: convert scan timeout to
+  wiphy delayed work" (943, the posted v4). Kept as a separate patch at
+  the end of the series because folding it into 943 would change the
+  context of 945, which then no longer applies without fuzz. Requires
+  943. ]
+
+The hw_scan abort path in ath12k_mac_op_hw_scan() and
+ath12k_mac_op_remove_interface() reset a radio's scan state to IDLE and
+drop ar->scan.arvif, but only cancel ar->scan.vdev_clean_wk. A scan
+timeout that was queued for a scan that has already started stays
+pending and fires later, possibly after a new scan has been started on
+the same radio, which it would then abort.
+
+Cancel ar->scan.timeout next to vdev_clean_wk in both places. Both run
+with the wiphy mutex held, as wiphy_delayed_work_cancel() requires.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -5954,6 +5954,7 @@ abort:
+ 
+ 			if (ar->scan.arvif == arvif) {
+ 				wiphy_work_cancel(hw->wiphy, &ar->scan.vdev_clean_wk);
++				wiphy_delayed_work_cancel(hw->wiphy, &ar->scan.timeout);
+ 				spin_lock_bh(&ar->data_lock);
+ 				ar->scan.arvif = NULL;
+ 				ar->scan.state = ATH12K_SCAN_IDLE;
+@@ -11185,6 +11186,7 @@ void ath12k_mac_op_remove_interface(struct ieee80211_hw *hw,
+ 		 */
+ 		if (ar->scan.arvif == arvif) {
+ 			wiphy_work_cancel(hw->wiphy, &ar->scan.vdev_clean_wk);
++			wiphy_delayed_work_cancel(hw->wiphy, &ar->scan.timeout);
+ 
+ 			spin_lock_bh(&ar->data_lock);
+ 			ar->scan.arvif = NULL;

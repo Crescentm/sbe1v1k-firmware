@@ -15,16 +15,28 @@ With the flag stuck, every later scan fails with -EBUSY ("prevent scan
 during firmware recovery"), keys for missing peers are silently ignored
 and MLO link changes are rejected once an interface is brought up.
 
-When a hw goes from OFF to ON in ath12k_mac_op_start(), clear the flag
-on each radio's device whose firmware is up again (CRASH_FLUSH cleared).
-Such a hw took no part in the recovery, so there is no reconfiguration
-left for the flag to protect.
+reconfig_complete() also finishes the reset bookkeeping of each device:
+once all of its radios have recovered it drops reset_count, completes
+reset_complete, clears is_reset and resets fail_cont_count. For a hw
+that was OFF this never happens either, so is_reset stays true and
+reset_count stays at 1. The next firmware crash then makes
+ath12k_core_reset() wait ATH12K_RESET_TIMEOUT_HZ for a reset that is not
+in progress and count the recovery as failed, on every later crash.
+
+When a hw goes from OFF to ON in ath12k_mac_op_start(), do the same for
+each radio's device whose firmware is up again (CRASH_FLUSH cleared):
+clear the flag and, if the device is still marked as resetting, count
+the radio as recovered and complete the reset once all radios of the
+device have been counted, exactly as reconfig_complete() does. This runs
+under the wiphy lock and ah->hw_mutex, like reconfig_complete(). Such a
+hw took no part in the recovery, so there is no reconfiguration left for
+the flag to protect.
 
 Signed-off-by: Crescentm <guyues@outlook.com>
 ---
 --- a/drivers/net/wireless/ath/ath12k/mac.c
 +++ b/drivers/net/wireless/ath/ath12k/mac.c
-@@ -9937,6 +9937,17 @@ int ath12k_mac_op_start(struct ieee80211_hw *hw)
+@@ -9937,6 +9937,39 @@ int ath12k_mac_op_start(struct ieee80211_hw *hw)
  	switch (ah->state) {
  	case ATH12K_HW_STATE_OFF:
  		ah->state = ATH12K_HW_STATE_ON;
@@ -32,12 +44,34 @@ Signed-off-by: Crescentm <guyues@outlook.com>
 +		/* A hw that was not started when the firmware crashed is
 +		 * skipped by the recovery: mac80211 does not reconfigure it and
 +		 * ath12k_mac_op_reconfig_complete() is never called for it, so
-+		 * ATH12K_FLAG_RECOVERY would stay set. Clear it once the
-+		 * firmware is back up.
++		 * ATH12K_FLAG_RECOVERY would stay set and the reset would never
++		 * be accounted as complete. Once the firmware is back up, do
++		 * what ath12k_mac_op_reconfig_complete() does for these radios.
 +		 */
 +		for_each_ar(ah, ar, i) {
-+			if (!test_bit(ATH12K_FLAG_CRASH_FLUSH, &ar->ab->dev_flags))
-+				clear_bit(ATH12K_FLAG_RECOVERY, &ar->ab->dev_flags);
++			struct ath12k_base *ab = ar->ab;
++			int recovery_count;
++
++			if (test_bit(ATH12K_FLAG_CRASH_FLUSH, &ab->dev_flags))
++				continue;
++
++			clear_bit(ATH12K_FLAG_RECOVERY, &ab->dev_flags);
++
++			if (!ab->is_reset)
++				continue;
++
++			recovery_count = atomic_inc_return(&ab->recovery_count);
++
++			ath12k_dbg(ab, ATH12K_DBG_BOOT, "recovery count %d\n",
++				   recovery_count);
++
++			if (recovery_count == ab->num_radios) {
++				atomic_dec(&ab->reset_count);
++				complete(&ab->reset_complete);
++				ab->is_reset = false;
++				atomic_set(&ab->fail_cont_count, 0);
++				ath12k_dbg(ab, ATH12K_DBG_BOOT, "reset success\n");
++			}
 +		}
  		break;
  	case ATH12K_HW_STATE_RESTARTING:
