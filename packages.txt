@@ -1,5 +1,5 @@
-# Extra packages on top of the ImageBuilder default + askey_sbe1v1k profile.
-# One per line; "-pkg" removes a default package.
+# Packages built into the image on top of the target and askey_sbe1v1k defaults.
+# One per line; scripts/src-build.sh selects each as CONFIG_PACKAGE_<name>=y.
 
 # LuCI (Chinese UI) and ImmortalWrt China defaults (timezone, language, mirror)
 luci
@@ -8,6 +8,10 @@ luci-i18n-firewall-zh-cn
 luci-i18n-package-manager-zh-cn
 default-settings-chn
 autocore
+
+# Lua LuCI compatibility for pages still written against the old API
+# (several third-party apps need it)
+luci-compat
 
 # NAT / offload: full-cone NAT for CGNAT + STUN, UPnP for P2P apps
 kmod-nft-fullcone
