@@ -1,0 +1,38 @@
+sbe1v1k: dts: describe the WAN PHY LEDs
+
+The RTL8261BE drives the WAN port's amber (LED0) and green (LED1) LEDs.
+Describe them so the PHY driver registers them and netdev trigger rules
+can be offloaded to the PHY (needs the RTL826x LED support in
+generic/hack-6.18/744). Default rules are set in board.d/01_leds.
+
+From hurrian/openwrt-w1700k 4824815669 "sbe1v1k: add phy leds config"
+(Kenneth Kasilag).
+
+diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+--- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
++++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+@@ -502,6 +502,24 @@
+ 		reset-gpios = <&tlmm 41 GPIO_ACTIVE_LOW>;
+ 		reset-assert-us = <40000>;
+ 		reset-deassert-us = <150000>;
++
++		/* WAN port LEDs, driven by the PHY (netdev trigger offload) */
++		leds {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			led@0 {
++				reg = <0>;
++				color = <LED_COLOR_ID_AMBER>;
++				function = LED_FUNCTION_WAN;
++			};
++
++			led@1 {
++				reg = <1>;
++				color = <LED_COLOR_ID_GREEN>;
++				function = LED_FUNCTION_WAN;
++			};
++		};
+ 	};
+ 
+ 	ethernet-phy-package@16 {
