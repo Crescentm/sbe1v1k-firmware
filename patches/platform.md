@@ -195,8 +195,8 @@ order. 0363 lands right after 0362.
   The lan1 LEDs already exist in the DTS: QCA8081 led@0 yellow, led@2
   green, active-low.
 - **QCA8075 (lan2/lan3) LEDs: not added.** The mainline qca807x driver can
-  do it (2 LEDs per PHY, MMD7 0x8074+, hw control up to 1000M, polarity
-  through the shared qca808x helpers). However, none of the SBE1V1K
+  do it (2 LEDs per PHY, MMD7 0x8074+, hw control up to 1000M; it has no
+  polarity op). However, none of the SBE1V1K
   sources show how the lan2/lan3 LEDs are wired: hurrian, OneNAS,
   yangzhg/Jackie264, the NSS/QSDK tree and our local trees give no LED
   index, colour or polarity. qca807x LED pins can also be GPIOs. Guessing
@@ -319,7 +319,7 @@ others.
 | Item | Tier | Files |
 |---|---|---|
 | R1 watchdog bootstatus | fix | `overlay/.../patches-6.18/0416`–`0420` |
-| R2 PCIe Root Port reset on link down | test | `overlay/.../patches-6.18/0421`–`0424` |
+| R2 PCIe Root Port reset on link down | dropped | was `overlay/.../patches-6.18/0421`–`0424` |
 | R3a PPE egress drain on link down | test | `overlay/.../patches-6.18/0425` |
 | R3b PPE multicast DRR slots | test | `overlay/.../patches-6.18/0426` |
 | R3c EEE off at the PHYs | test | `overlay/.../patches-6.18/0427` |
@@ -371,7 +371,18 @@ patches are applied last.
   falls back to the old check. The watchdog itself is unchanged.
 - **Upstream:** 0416–0419 merged; the IPQ9574 DTS part is not posted.
 
-## R2: PCIe Root Port reset after link down (0421–0424, test)
+## R2: PCIe Root Port reset after link down (0421–0424, dropped)
+
+Dropped after the code review of 2026-10-01, before any hardware test.
+On the frozen path `pcie_do_recovery()` always resets the subordinates,
+which with 0423 means a full controller deinit/init with PERST#. ath12k
+does a SoC global reset on every power-up and in firmware-crash
+recovery, and its own code warns that the link can drop then. A root
+port reset under a radio that is probing or recovering can turn MMIO
+into an SError (kernel panic) and break firmware-crash recovery, while
+ath12k has no PCI error handlers to benefit from the reset anyway. The
+notes below are kept for reference.
+
 
 - **Symptom:** when a QCN9274 link drops (firmware crash, link
   instability), the link stays down until reboot.
@@ -485,7 +496,7 @@ TXMAC_EN off first on link down, set it last on link up).
   v1 2025-12-16, the only version, patchwork "handled-elsewhere", not
   merged):
   - Cause of "Supply for s1 (s1) resolved to itself": the MP5496 table
-    uses the output's own name as its supply name. Our s1/s2 have no
+    uses the output's own name as its supply name. Our s1 has no
     `*-supply` and no `regulator-name`, so the name lookup finds the
     regulator itself. The core then uses the dummy supply, so the
     message is cosmetic.
@@ -631,8 +642,8 @@ board keeps its 25 kHz period. The notes below are kept for reference.
   `default-state = "keep"`. LED class names are
   `90000.mdio-1:12:{yellow,green}:lan` and `…:13:…`.
 - **Deliberately not like lan1:**
-  - **No `led@2`.** qca807x accepts index 0 and 1 only; anything else
-    fails with -EINVAL.
+  - **No `led@2`.** qca807x accepts index 0 and 1 only; any other index
+    registers but fails with -EINVAL once hw control is set.
   - **No `active-low`/`active-high`.** qca807x has no
     `led_polarity_set`, so either property makes `of_phy_led()` fail,
     which **fails the PHY probe and takes PPE ports 3/4 down with it**.
@@ -694,22 +705,23 @@ RAM boot (initramfs) first.
 1. **Boot and Ethernet:**
    - all four ports come up; lan2/lan3 PHYs probe (no -EINVAL in
      `dmesg | grep -i qca807`);
-   - `ethtool --show-eee wan`/`lan1`/`lan2` shows EEE not advertised
-     (0427).
+   - EEE off (0427): `ethtool --show-eee` cannot show it (no
+     get_eee in the EDMA ethtool ops, and phylink returns -EOPNOTSUPP
+     for a MAC without LPI capabilities). Read the PHY EEE advertisement
+     (MMD7.60, e.g. with phytool) or check the link partner;
+   - no PHY attach errors in dmesg (0427 makes phylink write the PHY
+     clock-stop bit on every PHY at attach).
 2. **Watchdog (0416–0420):**
    - `cat /sys/class/watchdog/watchdog0/bootstatus` after a normal boot
-     (expect 0, or 1 = POWERUNDER after a cold power-on);
+     (expect 0, or 16 = `WDIOF_POWERUNDER` after a cold power-on;
+     seen on the first round 2 RAM boot after a power cycle);
    - `echo c > /proc/sysrq-trigger` or stop the feeder
      (`ubus call system watchdog '{"magicclose":true,"stop":true}'`) and
      wait for the reset; afterwards bootstatus should be 32
      (`WDIOF_CARDRESET`). If it stays 0, read the raw word:
      `devmem 0x086007a4` (busybox devmem, if built).
-3. **PCIe (0421–0424):**
-   - `grep global /proc/interrupts`: three `qcom_pcie_global_irq*`
-     lines. Under heavy Wi-Fi traffic their counts must stay near 0. If
-     they climb with traffic, the MSI bits fire the global IRQ: report
-     it, and drop 0421–0424.
-   - all three radios still come up.
+3. **PCIe:** 0421–0424 were dropped (see R2); all three radios come
+   up.
 4. **Link flaps (0425–0427):**
    - plug/unplug each port 20 times, including under iperf load;
    - after each replug, traffic must flow;
@@ -729,3 +741,27 @@ RAM boot (initramfs) first.
    empty, cpufreq still scales up to 2.2 GHz.
 9. **rtpengine (feed):** `apk add kmod-ipt-rtpengine` and
     `modprobe xt_RTPENGINE` load without errors.
+
+## Code review before the third RAM boot (2026-10-01)
+
+A read-only review of every round 1 and round 2 platform patch against
+the patched 6.18.54 tree and upstream found:
+
+- **tree/0002, s1 boot voltage (fixed).** With min and max set, the
+  regulator core applies the minimum at registration because
+  `rpm_reg_get_voltage()` returns 0. The stock 587.5 mV minimum would
+  run the CPU at its boot clock on 587.5 mV until cpufreq takes over.
+  The 725 mV minimum (and ImmortalWrt's comment) is back; it equals the
+  lowest OPP. s2 is no longer described: Linux has no consumer for it,
+  and registering it only dropped it to 700 mV at boot.
+- **sbe1v1k-irq (fixed).** It deleted the whole `banirq` list, including
+  user entries. It now remembers its own numbers in
+  `irqbalance.irqbalance.sbe1v1k_banirq` and replaces only those.
+  Tested on the router with a copy of the config.
+- **0421–0424 (dropped),** see R2.
+- **Docs:** EEE check, bootstatus values, qca807x polarity and LED index
+  statements corrected.
+- Everything else (0363, 0410–0415, 0416–0420, 0425–0433, 744, tree
+  0004/0006/0030/0031, rtpengine, 99-sbe1v1k-defaults) matched upstream
+  or was traced as correct, including 0425's sleep in `mac_link_down()`
+  (all callers run in process context under `state_mutex`).

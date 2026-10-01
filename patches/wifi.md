@@ -200,7 +200,7 @@ Where things live (numbering reserved for WiFi):
 | Kind | Path | Adopt | Test |
 |---|---|---|---|
 | mac80211/cfg80211 | `overlay/package/kernel/mac80211/patches/subsys/` | 900–964 | 970, 980–983 |
-| ath12k | `patches/mac80211/` | 924–949 | 980–985 (plus round-1 970–978) |
+| ath12k | `patches/mac80211/` | 924–949 | 982–985 (plus round-1 970–978; 980/981 dropped) |
 | hostapd C code | `overlay/package/network/services/hostapd/patches/` | 071, 900–917, 930, 931 | 950, 980 |
 | hostapd ucode/Makefile, wifi-scripts outside `files-ucode` | `patches/tree/` | 0012–0017, 0019 (0018 unused) | — |
 | wifi-scripts `files-ucode` | `patches/wifi-scripts/` | 952 (rewritten), 953–955 | — |
@@ -327,7 +327,7 @@ section) and 980–983.
 | `962` fix slab-out-of-bounds read in `ieee80211_monitor_select_queue()` | wireless.git 6f63e919fe1e | Cen Zhang | monitor injection over-read | clean |
 | `963` fix RCU dereference in throughput estimate | mainline aa0069bd920a | Johannes Berg | fixes OpenWrt's own subsys/361 (lockdep) | **adapted** to the older form of 361 OpenWrt carries |
 | `964` keep fallback association elements alive | wireless.git a10a2f80476d | Zhao Li | STA: use-after-free when associating to a non-transmitted MBSSID profile | **adapted**: declaration context differs |
-| `980` verify if AP_VLAN belongs to the correct AP | mainline ba7a79b9bc87 (v7.3-rc4) | Slawomir Stepien | `NL80211_ATTR_STA_VLAN` may point at a VLAN of another AP | **test**. Requires the AP_VLAN to have the AP netdev's MAC. hostapd creates dynamic-VLAN interfaces with `hapd->own_addr`; on an AP MLD that is the link address, not the MLD (netdev) address, so dynamic VLAN on MLO could break. Delete 980 if `vlan_*` + MLO stops working |
+| `980` verify if AP_VLAN belongs to the correct AP | mainline ba7a79b9bc87 (v7.3-rc4) | Slawomir Stepien | `NL80211_ATTR_STA_VLAN` may point at a VLAN of another AP | **test**. Requires the AP_VLAN to have the AP netdev's MAC. This does not break dynamic VLAN on an AP MLD (checked in the code review): hostapd's `hostapd_vlan_if_add()` uses the MLD address when `mld_ap` is set, and mac80211 already binds an AP_VLAN to its AP only when the addresses match (`ieee80211_check_concurrent_iface()`) |
 | `981` do not support direct add of station to AP_VLAN interfaces | mainline 4ae3128c2303 | Slawomir Stepien | prerequisite of 983 | **test** |
 | `982` move link_id validation earlier in `nl80211_new_station()` | mainline e3d1acb02767 | Slawomir Stepien | prerequisite of 983 | **test** |
 | `983` check if AP has been started or joined a mesh before adding new station | mainline a842cfc1d6d8 | Slawomir Stepien | syzbot: station added to a non-beaconing AP/mesh | **test** (new -ENETDOWN for early NEW_STATION) |
@@ -389,7 +389,7 @@ log_level DEBUG` with `logread -f | grep -E "mesh|MESH|SAE|peer|Driver failed|pa
 "Driver failed to insert" → B; "lost its driver entry" (with 950) → C;
 "Could not parse beacon" → D.
 
-## ath12k → `patches/mac80211/` (adopt 924–949, test 980–985)
+## ath12k → `patches/mac80211/` (adopt 924–949, test 982–985)
 
 Candidates were the ath12k commits in v7.2..v7.3-rc5, linux-7.2.y, ath.git
 `ath-next` (ath-next-20260927) and the linux-wireless patchwork queue of the
@@ -435,8 +435,7 @@ last four months. "clean" means the upstream diff applied unchanged.
 
 | File | Source | Author | Purpose | Notes |
 |---|---|---|---|---|
-| `980-wifi-ath11k-ath12k-remove-skb-parameter-from-get_ring_selector` | [patchwork v7 2/4](https://patchwork.kernel.org/project/linux-wireless/patch/20260917064825.12747-3-jtornosm@redhat.com/) | Jose Ignacio Tornos Martinez | preparation for 981 | ath12k hunks only (1/4, 3/4 and the ath11k half are ath11k-only) |
-| `981-wifi-ath12k-implement-custom-wake_tx_queue-with-flow-control` | [patchwork v7 4/4](https://patchwork.kernel.org/project/linux-wireless/patch/20260917064825.12747-5-jtornosm@redhat.com/) | Jose Ignacio Tornos Martinez | TX flow control: dequeue from mac80211 TXQs only while the TCL ring has room (no "failed to transmit frame -12" drops) | **981 needs 980 to compile** (delete both together). Tested upstream only on WCN7850. Risk: a TXQ stopped on a full ring is only woken by the next enqueue (possible low-rate stalls) |
+| ~~`980`/`981` wake_tx_queue flow control (patchwork v7 2/4, 4/4)~~ | Jose Ignacio Tornos Martinez | | **dropped** after the code review: during firmware-crash recovery the new wake function reads the TCL ring through a freed `tp_addr` before `ieee80211_tx_dequeue()` honours the stopped queues; on an AP MLD it picks `assoc_link_id` (0) for non-MLO clients and can stall the TXQ. Not merged upstream |
 | `982-wifi-ath12k-fix-MLO-station-firmware-crash-recovery` | [patchwork v2 1/3](https://patchwork.kernel.org/project/linux-wireless/patch/20260804175004.1761075-2-jtornosm@redhat.com/) | Jose Ignacio Tornos Martinez | keeps ATH12K_FLAG_RECOVERY until `reconfig_complete` and skips WMI to dead firmware during SSR | changes SSR timing for AP too; WCN7850 STA tested only. Context needs 932. Keep 983 with it |
 | `983-wifi-ath12k-clear-recovery-flag-when-starting-a-hw-skipped-by-recovery` | new | Crescentm | follow-up to 982 | with 982, a crash while all interfaces are down left RECOVERY set forever (every scan -EBUSY via 944); clears it on OFF→ON start for radios whose firmware is up. Harmless without 982 |
 | `984-wifi-ath12k-skip-connection_loss_work-for-MLO-beacon-miss` | [patchwork v2 3/3](https://patchwork.kernel.org/project/linux-wireless/patch/20260804175004.1761075-4-jtornosm@redhat.com/) | Jose Ignacio Tornos Martinez | MLO **STA** disconnected every ~16 s | STA only |
@@ -453,9 +452,9 @@ last four months. "clean" means the upstream diff applied unchanged.
 
 ### Removal checks (full re-apply with `patch -F0` each time)
 
-- Each of 970–978, 980–985 can be deleted on its own (some later patches then
+- Each of 970–978, 982–985 can be deleted on its own (some later patches then
   apply with an offset, never with fuzz), except: 975 → 976 → 977 as in
-  round 1; **981 needs 980** to compile; 982 should keep 983.
+  round 1; 982 should keep 983.
 - All of 970–985 can be deleted together.
 - Adopt-tier dependencies: 933 and 934 need 928; 930 needs 929; 940 needs
   939; 974 (test) needs 949.
@@ -598,15 +597,13 @@ three-radio AP setup. Then, roughly in order of risk:
 7. **Dynamic VLAN / WDS** (subsys 915, 923, 959; test 980; hostapd 071,
    tree 0016): RADIUS-assigned VLANs and a 4addr client; `wifi down/up`
    cycles; no "No buffer space available"; a station in VLAN A does not get
-   unicast sent on VLAN B (959). With test 980 also try VLANs on an MLO AP:
-   if stations can no longer be moved into their VLAN, delete 980.
+   unicast sent on VLAN B (959). Also try VLANs on an MLO AP (subsys 980).
 8. **20/40 coexistence** (hostapd test 980): clear `noscan` on 5 GHz with
    HT40/VHT80, start all radios together: log shows "keeping the configured
    channel width" and `iw dev` shows 80 MHz, not 20.
-9. **TX under load** (ath12k 936, 937, 942; test 980+981): iperf TCP/UDP with
-   many clients, no "failed to transmit frame"; with 981 compare throughput
-   and ping-under-load against a build without 980+981, and look for
-   stalls of low-rate flows.
+9. **TX under load** (ath12k 936, 937, 942): iperf TCP/UDP with many
+   clients; note any "failed to transmit frame" (980/981 flow control was
+   dropped, so some drops under overload are expected).
 10. **Enterprise / 802.11r** (hostapd 903, 908, 912, 915, 917): WPA-EAP with
     RADIUS and with the internal EAP server (PEAP); FT roaming between two
     APs, including FT-SAE with a wpa_supplicant client.
@@ -648,3 +645,34 @@ ieee80211 hotplug handler after netifd has started, and
 RAM boot by deleting the config and running the new handler: 0 → 3
 radios up; a second run with no change does not reload. Same code in
 OpenWrt main (`10-wifi-detect`), not reported upstream yet.
+
+## Code review before the third RAM boot (2026-10-01)
+
+Read-only reviews of all WiFi patches against the patched trees and
+upstream (stable 7.2.y, mainline, wireless.git, ath.git, patchwork,
+hostap.git, OpenWrt main and PRs). Every adopted patch matched upstream
+or was traced as equivalent. Changes made:
+
+- **ath12k 980/981 dropped** (see the table): use of a freed ring pointer
+  during firmware-crash recovery, wrong link on an AP MLD, and the series
+  is not merged upstream.
+- **ath12k 983:** when the hw is off during a crash, reconfig_complete
+  never runs, so `is_reset`/`reset_count` stayed set and every later
+  crash waited 20 s and counted as failed; 983 now does that bookkeeping.
+- **ath12k 943:** the hw_scan abort and remove_interface paths now also
+  cancel `scan.timeout`.
+- **subsys 970:** also drops mesh peering action frames and probe
+  requests received on another radio's channel, not only beacons.
+- **wifi-scripts 952:** TKIP is removed from `wpa_pairwise` on 6 GHz, so
+  `psk2+tkip` style configs come up as well.
+- **Notes corrected:** subsys 980 does not break dynamic VLAN on an MLD.
+
+Known and left as is:
+- wifi-scripts 950 remaps the radio index only in `mac80211.sh`; netifd
+  and the hostapd MLD radio mask still use the configured index. With
+  ath12k 920 the radio order is fixed, so no remap happens on this board.
+- hostapd 950 (mesh stale peer restart) has no rate limit; no code path
+  that would make it loop was found.
+- ath12k 978 has no fallback to DMA chunks if a reserved region is too
+  small (check the boot log for "host-ddr-mem too small" / "no
+  mlo-global-mem").
