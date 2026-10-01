@@ -1,0 +1,40 @@
+sbe1v1k: dts: start lan1 (QCA8081) in SGMII  [test item]
+
+QCA8081 has no USXGMII. Its SerDes runs SGMII (with in-band AN) at
+10/100/1000 and 2500BASE-X at 2.5G, and qca808x_read_status() reports
+which one is in use, so phylink switches the PCS at link-up. "usxgmii"
+only selected the initial (pre-link) mode, which made the PCS run the
+USXGMII/XPCS bring-up for a PHY that never speaks it.
+
+Start in SGMII and keep "managed = in-band-status". Two other variants
+failed on hardware (RAM boot, 2026-10-01), each with a 1G Mac adapter
+on lan1 while a 2.5G NAS worked:
+- 2500base-x + in-band: phylink treats an in-band 802.3z port like an
+  SFP cage and never attaches the PHY, so the MAC stayed in 2500BASE-X
+  while the PHY moved to SGMII.
+- 2500base-x without in-band: the PHY is attached and the PCS follows
+  it to SGMII, but without in-band AN; link up, 11 frames sent, none
+  received.
+SGMII is not 802.3z, so the PHY is attached, SGMII keeps in-band AN, and
+for 2500BASE-X the PCS only reports LINK_INBAND_DISABLE, so phylink
+uses out-of-band status at 2.5G.
+
+diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+--- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
++++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
+@@ -449,7 +449,14 @@
+ 
+ 		port@5 {
+ 			reg = <5>;
+-			phy-mode = "usxgmii";
++			/*
++			 * QCA8081 has no USXGMII: its SerDes runs SGMII with
++			 * in-band AN up to 1G and 2500BASE-X at 2.5G, and the
++			 * PHY driver reports which one is in use. Start in
++			 * SGMII: with in-band status and an 802.3z mode such as
++			 * 2500base-x, phylink would not attach the PHY at all.
++			 */
++			phy-mode = "sgmii";
+ 			phy-handle = <&qca8081_28>;
+ 			pcs-handle = <&pcs1_ch0>;
+ 			managed = "in-band-status";

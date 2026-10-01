@@ -14,7 +14,7 @@ ImmortalWrt master `bf156b68e3` plus `tree/0001`–`0002`. Status checked on
 | K5 MTU validation | `overlay/.../patches-6.18/0413-net-ethernet-qualcomm-ppe-validate-MTU-before-applying-it.patch` |
 | K6 RPS / IRQ spread | `overlay/.../patches-6.18/0414-net-ethernet-qualcomm-ppe-fix-RPS-and-IRQ-distribution.patch` |
 | L1 WAN LEDs | `overlay/target/linux/generic/hack-6.18/744-net-phy-realtek-add-rtl826x-led-support.patch`, `tree/0004-sbe1v1k-dts-wan-phy-leds.patch`, `overlay/target/linux/qualcommbe/ipq95xx/base-files/etc/board.d/01_leds` |
-| T2a lan1 2500base-x (test) | `tree/0005-sbe1v1k-dts-lan1-2500base-x.patch` |
+| T2a lan1 SGMII (test) | `tree/0005-sbe1v1k-dts-lan1-sgmii.patch` |
 | T2b QCA8081 hibernation off (test) | `overlay/.../patches-6.18/0415-net-phy-qca808x-disable-hibernation-on-QCA8081.patch` |
 
 `overlay/.../patches-6.18` means `overlay/target/linux/qualcommbe/patches-6.18`.
@@ -209,7 +209,7 @@ order. 0363 lands right after 0362.
   wlan-ap rtk) have no LED code. hurrian ships it on this board.
 - **Upstream:** not in OpenWrt or ImmortalWrt.
 
-## T2a: 0005 lan1 phy-mode `usxgmii` → `2500base-x` (test item)
+## T2a: 0005 lan1 phy-mode `usxgmii` → `sgmii` (test item)
 
 - **Driver facts checked in the 6.18.54 tree:**
   - qca808x fills `possible_interfaces` with SGMII and 2500BASEX only.
@@ -224,18 +224,22 @@ order. 0363 lands right after 0362.
   LINK_INBAND_DISABLE for 2500BASEX and DISABLE|ENABLE for SGMII.
 - **PPE:** 2500BASEX is in `mac_interfaces[]` and selects XGMAC; SGMII
   selects GMAC.
-- **In-band setting:** `managed = "in-band-status"` is removed, as on
-  the 8devices Kiwi (same uniphy1/port 5, same PHY).
-  - The first version kept it, reasoning from `phylink_pcs_neg_mode()`.
-    That was wrong: with in-band and an 802.3z mode,
-    `phylink_fwnode_phy_connect()` returns before attaching the PHY
-    (`phylink_expects_phy()` is false), so lan1 had no phydev at all.
-  - Hardware result of that version (RAM boot, 2026-10-01): a 2.5G NAS
-    linked and passed traffic; a 1G Mac adapter linked at the PHY
-    (1000baseT on the Mac) but lan1 stayed down, no LED, no DHCP. The PHY
-    had moved its SerDes to SGMII while the MAC stayed in 2500BASE-X.
-  - Without `managed`, phylink runs in PHY mode, attaches the QCA8081
-    and follows its SGMII/2500BASE-X changes.
+- **Initial mode and in-band:** `sgmii`, keeping `managed = "in-band-status"`.
+  Two earlier versions failed on hardware (RAM boot, 2026-10-01), each
+  with a 1G Mac adapter on lan1 while a 2.5G NAS worked:
+  - `2500base-x` + in-band (round 1, also on the eMMC install):
+    `phylink_fwnode_phy_connect()` returns early for an in-band 802.3z
+    port (`phylink_expects_phy()` is false), so lan1 had no phydev. The
+    PHY moved its SerDes to SGMII at 1G; the MAC stayed in 2500BASE-X.
+    No link on lan1, no LED.
+  - `2500base-x` without `managed`: the PHY is attached
+    (`configuring for phy/2500base-x`), phylink follows it to SGMII and
+    the link comes up at 1G, but without in-band AN on the SGMII side:
+    11 frames sent, 0 received, no DHCP.
+  - `sgmii` is not 802.3z, so the PHY is attached; SGMII keeps in-band
+    AN as with the original `usxgmii`; at 2.5G the PCS reports
+    LINK_INBAND_DISABLE for 2500BASEX, so phylink uses out-of-band
+    status there.
 
 - **Not used on this board:** uniphy1 has no `qcom,uniphy-clkout-25mhz`, so
   nothing depends on the USXGMII bring-up path.
@@ -284,7 +288,7 @@ everything in this repo applied, including the WiFi agent's
 - **DTB:** built with the same cpp + dtc command and flags as
   `Image/BuildDTB` in `include/image.mk`, then decompiled.
   - The RTL8261BE node has `leds { led@0 amber "wan"; led@1 green "wan" }`.
-  - port@5 has `phy-mode = "2500base-x"`.
+  - port@5 has `phy-mode = "sgmii"` (was `2500base-x` in round 1).
   - The dtc warnings are identical with and without 0004/0005: the
     existing `mmc card@0` reg ones only.
 - **`checkpatch.pl` on 0411–0415:** clean.
