@@ -1,8 +1,19 @@
+sbe1v1k: dts: fix cpufreq and the QSGMII TX level
+
+- Drop l5: the stock tree has no l5, and requesting it from RPM fails
+  with -ENXIO, which leaves s1 unregistered and cpufreq-dt deferred.
+- s1: keep the 725 mV minimum (the stock tree says 587.5 mV, but with
+  apply_uV the regulator core brings s1 up at its minimum before
+  cpufreq takes over); stock 1075 mV maximum; always-on/boot-on.
+- Do not describe s2: nothing in Linux uses it.
+- Disable the unused QCE crypto nodes so the interconnect provider
+  reaches sync_state().
+- QCA8075: 300 mV QSGMII TX amplitude as programmed by the stock SSDK.
+
 diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
-index f39badf135..fc5dadb29c 100644
 --- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
 +++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
-@@ -171,26 +171,40 @@
+@@ -171,26 +171,46 @@
  	status = "okay";
  };
  
@@ -33,29 +44,36 @@ index f39badf135..fc5dadb29c 100644
 -		* the regulators are brought up with 725mV which is sufficient for all the
 -		* corner parts to operate at 800MHz
 -		*/
--			regulator-min-microvolt = <725000>;
-+		 * Values from the stock SBE1V1K device tree (SCP_1.0.5 HLOS and
-+		 * QSDK 12.5). The stock tree has no l5: requesting it from RPM
-+		 * fails with -ENXIO, which also leaves s1 unregistered and keeps
-+		 * cpufreq-dt in deferred probe (CPU stuck at the boot clock).
++		 * The stock SBE1V1K device tree (SCP_1.0.5 HLOS and QSDK 12.5)
++		 * has no l5: requesting it from RPM fails with -ENXIO, which also
++		 * leaves s1 unregistered and keeps cpufreq-dt in deferred probe
++		 * (CPU stuck at the boot clock).
++		 *
++		 * During kernel bootup, the SoC runs at 800MHz with 875mV set by
++		 * the bootloaders. During regulator registration, kernel not
++		 * knowing the initial voltage, considers it as zero and brings up
++		 * the regulators with minimum supported voltage. Keep the
++		 * regulator-min-microvolt at the SVS voltage of 725mV so that the
++		 * regulators are brought up with 725mV which is sufficient for
++		 * all the corner parts to operate at 800MHz. The lowest CPU OPP
++		 * also uses 725mV; the stock range starts at 587.5mV.
++		 *
++		 * The stock tree also lists s2 (700-1000mV). Linux has no
++		 * consumer for it, and registering it would only drop it to its
++		 * minimum at boot, so it is left to the bootloader and RPM.
 +		 */
 +		ipq9574_s1: s1 {
-+			regulator-min-microvolt = <587500>;
+ 			regulator-min-microvolt = <725000>;
  			regulator-max-microvolt = <1075000>;
-+			regulator-always-on;
-+			regulator-boot-on;
- 		};
- 
+-		};
+-
 -		mp5496_l5: l5 {
 -			regulator-min-microvolt = <1800000>;
 -			regulator-max-microvolt = <1800000>;
-+		ipq9574_s2: s2 {
-+			regulator-min-microvolt = <700000>;
-+			regulator-max-microvolt = <1000000>;
  			regulator-always-on;
  			regulator-boot-on;
  		};
-@@ -497,6 +511,11 @@
+@@ -497,6 +517,11 @@
  		reg = <16>;
  
  		qcom,package-mode = "qsgmii";
