@@ -90,12 +90,14 @@ FEED_URL=${FEED_URL:-https://crescentm.github.io/sbe1v1k-packages}
 RELEASE=${RELEASE:-$(./scripts/getver.sh)-$(cd "$REPO" &&
 	git rev-parse --short HEAD 2>/dev/null || echo local)}
 arch=$(sed -n 's/^CONFIG_TARGET_ARCH_PACKAGES="\(.*\)"$/\1/p' .config)
+# Only feeds the image itself installs from end up with an index here.
+our_feeds="base luci packages"
 feeds="base luci packages routing telephony video"
 mkdir -p files/etc/apk/repositories.d
 {
 	echo "# SBE1V1K firmware $RELEASE"
 	echo "$FEED_URL/$RELEASE/targets/qualcommbe/ipq95xx/packages/packages.adb"
-	for f in $feeds; do
+	for f in $our_feeds; do
 		echo "$FEED_URL/$RELEASE/packages/$arch/$f/packages.adb"
 	done
 	for f in $feeds; do
@@ -120,6 +122,11 @@ if ! make -j"$JOBS" IGNORE_ERRORS=m > "$SRC/build-make.log" 2>&1; then
 	grep 'ERROR: package' "$SRC/build-make.log" || tail -30 "$SRC/build-make.log"
 	die "build failed"
 fi
+
+for f in targets/qualcommbe/ipq95xx/packages $(for g in $our_feeds; do
+		echo "packages/$arch/$g"; done); do
+	[ -f "bin/$f/packages.adb" ] || die "feed bin/$f has no index"
+done
 
 mkdir -p "$OUT/feed/targets/qualcommbe/ipq95xx" "$OUT/feed/packages"
 for f in bin/targets/qualcommbe/ipq95xx/*; do
