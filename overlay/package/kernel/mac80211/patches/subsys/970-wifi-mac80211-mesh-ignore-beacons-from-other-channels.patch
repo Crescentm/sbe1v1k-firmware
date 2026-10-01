@@ -23,13 +23,26 @@ scan and to 2.4 GHz beacons heard from an adjacent channel.
 Ignore beacons and probe responses whose channel is not the operating
 channel of the mesh interface.
 
+The other mesh management frames have the same problem: a peer on
+another radio's channel can still open a peering with a Mesh Peering
+Open frame, which creates the station without any beacon, and probe
+requests from other channels are answered. In
+ieee80211_mesh_rx_queued_mgmt(), also ignore action frames and probe
+requests whose RX frequency is not the frequency of the operating
+channel. With a user space MPM the peering frames are not queued but
+passed to user space from ieee80211_rx_h_action(), so drop them there
+when they were received on another channel. Nothing is dropped while
+the interface has no operating channel, and the frequency comparison
+also covers 6 GHz, where frames carry no DS Parameter Set element.
+
 Signed-off-by: Crescentm <guyues@outlook.com>
 ---
- net/mac80211/mesh.c | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ net/mac80211/mesh.c | 24 ++++++++++++++++++++++++
+ net/mac80211/rx.c   | 12 +++++++++++-
+ 2 files changed, 35 insertions(+), 1 deletion(-)
 
 diff --git a/net/mac80211/mesh.c b/net/mac80211/mesh.c
-index 8f88141..8626cd3 100644
+index 8f88141..b698fe2 100644
 --- a/net/mac80211/mesh.c
 +++ b/net/mac80211/mesh.c
 @@ -1505,6 +1505,15 @@ static void ieee80211_mesh_rx_bcn_presp(struct ieee80211_sub_if_data *sdata,
@@ -48,3 +61,57 @@ index 8f88141..8626cd3 100644
  	if (mesh_matches_local(sdata, elems)) {
  		mpl_dbg(sdata, "rssi_threshold=%d,rx_status->signal=%d\n",
  			sdata->u.mesh.mshcfg.rssi_threshold, rx_status->signal);
+@@ -1685,6 +1694,7 @@ void ieee80211_mesh_rx_queued_mgmt(struct ieee80211_sub_if_data *sdata,
+ 				   struct sk_buff *skb)
+ {
+ 	struct ieee80211_rx_status *rx_status;
++	struct ieee80211_channel *chan;
+ 	struct ieee80211_mgmt *mgmt;
+ 	u16 stype;
+ 
+@@ -1698,6 +1708,20 @@ void ieee80211_mesh_rx_queued_mgmt(struct ieee80211_sub_if_data *sdata,
+ 	mgmt = (struct ieee80211_mgmt *) skb->data;
+ 	stype = le16_to_cpu(mgmt->frame_control) & IEEE80211_FCTL_STYPE;
+ 
++	/*
++	 * With multiple radios in one wiphy, frames received by any radio
++	 * are passed to all interfaces. Peering and other action frames or
++	 * probe requests received on another channel come from stations
++	 * that cannot be neighbours of this mesh. Beacons and probe
++	 * responses are checked against the channel they advertise in
++	 * ieee80211_mesh_rx_bcn_presp().
++	 */
++	chan = sdata->vif.bss_conf.chanreq.oper.chan;
++	if ((stype == IEEE80211_STYPE_ACTION ||
++	     stype == IEEE80211_STYPE_PROBE_REQ) &&
++	    chan && chan->center_freq != rx_status->freq)
++		return;
++
+ 	switch (stype) {
+ 	case IEEE80211_STYPE_PROBE_RESP:
+ 	case IEEE80211_STYPE_BEACON:
+diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
+index d997504..975f720 100644
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -3861,9 +3861,19 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
+ 		case WLAN_SP_MESH_PEERING_CONFIRM:
+ 			if (!ieee80211_vif_is_mesh(&sdata->vif))
+ 				goto invalid;
+-			if (sdata->u.mesh.user_mpm)
++			if (sdata->u.mesh.user_mpm) {
++				struct ieee80211_channel *chan =
++					sdata->vif.bss_conf.chanreq.oper.chan;
++
++				/* With multiple radios in one wiphy, this
++				 * may come from another radio's channel;
++				 * see ieee80211_mesh_rx_queued_mgmt().
++				 */
++				if (chan && chan->center_freq != status->freq)
++					return RX_DROP_U_MESH_WRONG_ACTION;
+ 				/* userspace handles this frame */
+ 				break;
++			}
+ 			goto queue;
+ 		case WLAN_SP_MGK_INFORM:
+ 		case WLAN_SP_MGK_ACK:
