@@ -1,0 +1,103 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Kathiravan Thirumoorthy <kathiravan.thirumoorthy@oss.qualcomm.com>
+Date: Wed, 10 Jun 2026 22:28:27 +0530
+Subject: [PATCH] arm64: dts: qcom: ipq9574: Add missing PCIe global IRQs
+
+commit 0b967a82e7b3c575af7f71df68d56e7786ab533e upstream.
+
+IPQ9574 also has the dedicated 'global' IRQ line for each PCIe controller.
+Add the same.
+
+Signed-off-by: Kathiravan Thirumoorthy <kathiravan.thirumoorthy@oss.qualcomm.com>
+Reviewed-by: Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Link: https://lore.kernel.org/r/20260610-ipq9574_pcie_global_irq-v1-1-6d6333b95c43@oss.qualcomm.com
+Signed-off-by: Bjorn Andersson <andersson@kernel.org>
+---
+ arch/arm64/boot/dts/qcom/ipq9574.dtsi | 24 ++++++++++++++++--------
+ 1 file changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/ipq9574.dtsi b/arch/arm64/boot/dts/qcom/ipq9574.dtsi
+index 20601b675..742359cef 100644
+--- a/arch/arm64/boot/dts/qcom/ipq9574.dtsi
++++ b/arch/arm64/boot/dts/qcom/ipq9574.dtsi
+@@ -981,7 +981,8 @@ pcie1: pcie@10000000 {
+ 				     <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>,
+-				     <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
++				     <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>,
++				     <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
+ 			interrupt-names = "msi0",
+ 					  "msi1",
+ 					  "msi2",
+@@ -989,7 +990,8 @@ pcie1: pcie@10000000 {
+ 					  "msi4",
+ 					  "msi5",
+ 					  "msi6",
+-					  "msi7";
++					  "msi7",
++					  "global";
+ 
+ 			#interrupt-cells = <1>;
+ 			interrupt-map-mask = <0 0 0 0x7>;
+@@ -1067,7 +1069,8 @@ pcie3: pcie@18000000 {
+ 				     <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 415 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 494 IRQ_TYPE_LEVEL_HIGH>,
+-				     <GIC_SPI 495 IRQ_TYPE_LEVEL_HIGH>;
++				     <GIC_SPI 495 IRQ_TYPE_LEVEL_HIGH>,
++				     <GIC_SPI 188 IRQ_TYPE_LEVEL_HIGH>;
+ 			interrupt-names = "msi0",
+ 					  "msi1",
+ 					  "msi2",
+@@ -1075,7 +1078,8 @@ pcie3: pcie@18000000 {
+ 					  "msi4",
+ 					  "msi5",
+ 					  "msi6",
+-					  "msi7";
++					  "msi7",
++					  "global";
+ 
+ 			#interrupt-cells = <1>;
+ 			interrupt-map-mask = <0 0 0 0x7>;
+@@ -1153,7 +1157,8 @@ pcie2: pcie@20000000 {
+ 				     <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>,
+-				     <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
++				     <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>,
++				     <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>;
+ 			interrupt-names = "msi0",
+ 					  "msi1",
+ 					  "msi2",
+@@ -1161,7 +1166,8 @@ pcie2: pcie@20000000 {
+ 					  "msi4",
+ 					  "msi5",
+ 					  "msi6",
+-					  "msi7";
++					  "msi7",
++					  "global";
+ 
+ 			#interrupt-cells = <1>;
+ 			interrupt-map-mask = <0 0 0 0x7>;
+@@ -1238,7 +1244,8 @@ pcie0: pcie@28000000 {
+ 				     <GIC_SPI 59 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>,
+ 				     <GIC_SPI 68 IRQ_TYPE_LEVEL_HIGH>,
+-				     <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>;
++				     <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>,
++				     <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
+ 			interrupt-names = "msi0",
+ 					  "msi1",
+ 					  "msi2",
+@@ -1246,7 +1253,8 @@ pcie0: pcie@28000000 {
+ 					  "msi4",
+ 					  "msi5",
+ 					  "msi6",
+-					  "msi7";
++					  "msi7",
++					  "global";
+ 
+ 			#interrupt-cells = <1>;
+ 			interrupt-map-mask = <0 0 0 0x7>;
