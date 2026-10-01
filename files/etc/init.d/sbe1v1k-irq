@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+# qcom-ppe gives each EDMA ring IRQ its own CPU. irqbalance does not know
+# the class of these platform IRQs, places them at cache-domain level (all
+# four CPUs share the L2) and the GIC then delivers every one to CPU0.
+# Keep irqbalance away from them. --banmod cannot match platform IRQs, so
+# ban them by number, refreshed on each boot before irqbalance starts.
+
+START=89
+
+boot() {
+	local irqs cur
+
+	irqs=$(awk -F: '/ (rxdesc|txcmpl)_[0-9]+$/ { gsub(/ /, "", $1); print $1 }' \
+		/proc/interrupts | sort -n | tr '\n' ' ')
+	irqs=${irqs% }
+	[ -n "$irqs" ] || return 0
+
+	cur=$(uci -q get irqbalance.irqbalance.banirq)
+	[ "$cur" = "$irqs" ] && return 0
+
+	uci -q delete irqbalance.irqbalance.banirq
+	for irq in $irqs; do
+		uci -q add_list irqbalance.irqbalance.banirq="$irq"
+	done
+	uci -q commit irqbalance
+}

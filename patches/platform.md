@@ -282,3 +282,18 @@ everything in this repo applied, including the WiFi agent's
   - The dtc warnings are identical with and without 0004/0005: the
     existing `mmc card@0` reg ones only.
 - **`checkpatch.pl` on 0411–0415:** clean.
+
+## K6 follow-up: irqbalance
+
+Tested on hardware (RAM boot): the driver set the per-ring hints correctly,
+but irqbalance then rewrote every EDMA IRQ affinity to `0-3`. It does not
+know the class of these platform IRQs, places them at cache-domain level
+(all four Cortex-A73 cores share the L2), and the GIC delivers a `0-3`
+IRQ to CPU0. `irqbalance --banmod=qcom_ppe` does not help: irqbalance
+cannot map platform IRQs to a module. Banning them by number works, and
+irqbalance still spreads the ath12k `ce*` IRQs.
+
+`files/etc/init.d/sbe1v1k-irq` (START=89, before irqbalance) collects the
+`rxdesc_*`/`txcmpl_*` IRQ numbers from `/proc/interrupts` and stores them as
+`irqbalance.irqbalance.banirq`, writing the config only when the list
+changes. Verified: after 30 s of irqbalance, rxdesc_20..23 stay on CPU0..3.
