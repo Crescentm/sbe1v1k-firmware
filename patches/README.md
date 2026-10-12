@@ -5,13 +5,18 @@
 | Directory | Applied how | Contents |
 |---|---|---|
 | `../overlay/` | copied into the tree as is | new files: qualcommbe kernel patches, mac80211/cfg80211 fixes (`package/kernel/mac80211/patches/subsys/`), hostapd fixes (`package/network/services/hostapd/patches/`), a feed package fix, and a host fakeroot fix for user namespaces |
-| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, DTS fixes, kernel version, hostapd/wifi-scripts backports from OpenWrt main |
+| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, DTS fixes, hostapd ubus/rfkill leak fixes, `macaddr random` on MLO, hostapd/wifi-scripts `PKG_RELEASE` |
 | `mac80211/` | copied to `package/kernel/mac80211/patches/ath12k/` | ath12k fixes; 970–989 are the test tier |
-| `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, 6 GHz security, 0 dBm TX power, OWE transition |
+| `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, no TKIP on 6 GHz, 0 dBm TX power, loading the wireless config written at first boot |
+
+Base: ImmortalWrt master `da63f7d6ac` (2026-10-12, kernel 6.18.55,
+mac80211 = backports 7.2 `PKG_RELEASE:=5`, hostapd `831364bf02`
+`PKG_RELEASE:=4`). See [Rebase onto da63f7d6ac](#rebase-onto-immortalwrt-da63f7d6ac-2026-10-12)
+for what changed against the old base `bf156b68e3`.
 
 Details for the patches added on 2026-10-01 (rounds 1 and 2):
 
-- [platform.md](platform.md): kernel 6.18.54, PPE/EDMA fixes, IRQ spreading,
+- [platform.md](platform.md): kernel 6.18.54 (dropped on 2026-10-12: ImmortalWrt is on 6.18.55), PPE/EDMA fixes, IRQ spreading,
   WAN LEDs, lan1 SGMII and QCA8081 hibernation; round 2: watchdog
   bootstatus, PPE egress/EEE, upstream phylink/LED/regulator/thermal
   fixes, lan2/lan3 LEDs
@@ -23,6 +28,63 @@ Details for the patches added on 2026-10-01 (rounds 1 and 2):
 The notes below record where the first WiFi patches came from and their upstream
 status. They were first validated against the ImmortalWrt SDK, then built and
 tested on hardware from ImmortalWrt master `bf156b68e3`.
+
+---
+
+## Rebase onto ImmortalWrt `da63f7d6ac` (2026-10-12)
+
+The weekly CI clones ImmortalWrt master. Since `db9616b9af` (2026-10-04,
+kernel 6.18.55) `tree/0003` no longer applied, and the 462 commits after
+`bf156b68e3` also merged most of our OpenWrt main backports. Every patch
+was checked against `da63f7d6ac`:
+
+| Patch | Verdict | Upstream |
+|---|---|---|
+| `tree/0003` kernel 6.18.54 | dropped | `db9616b9af` (6.18.55) |
+| `tree/0010` fsync board.json, `tree/0011` keep board.json entries | dropped | `0a91f73d53`, `220bdab34e`: board.json now lives in `/tmp/sysinfo` (`/etc/board.json` is a symlink, the board.d data is in `/etc/board-base.json`), so wifi-detect no longer writes to flash. Both OpenWrt PRs (#25471, #25473) were closed for this reason |
+| `tree/0012` DPP | dropped | `fcd9dbf534`, `27b8aa25f8`, `24723ba310`; PR #25509 as `909be7c9fa` |
+| `tree/0013` MLD reconfiguration | dropped | `79444dcc68`, `4c6992b13b`, `87623c1e67`, `9a81bf528d`, `b833ad3511` |
+| `tree/0014` ubus BTM/MBO | dropped | `aa99fb89a0`, `400c79e6b6` |
+| `tree/0015` wifi-scripts dpp schema, provisioning regdomain | dropped | `54a6f4ee1e`, `2de3225246` |
+| `tree/0016` (PR #25339) | reduced, refreshed | the neighbour-list leak is fixed by `47f3de3540`. Kept: rfkill stub, taxonomy free (rebuilt on the new `600-ubus_support.patch` with quilt; 601, 605 and 803 refreshed), NULL ubus ctx in `hostapd_ubus_vlan_action()` (`8b4c110555` changes the reference count but `has_subscribers` is still not cleared) |
+| `tree/0017` `macaddr random` on MLO (PR #24955) | ported | still needed with the netifd MAC allocator (`090afc220f`, `eb8cbaeebd`): `mld_macaddr_get()` passes the configured `macaddr` to netifd as a static address, so `random` still reaches nl80211 |
+| `tree/0019` hostapd `PKG_RELEASE` | redone | ImmortalWrt bumped hostapd to 4 and wifi-scripts to 3; the new `0019-hostapd-wifi-scripts-bump-PKG_RELEASE` bumps them to 5 and 4 (0010/0011 used to bump wifi-scripts) |
+| `overlay/…/hostapd/patches/071` | dropped | identical file in ImmortalWrt (`c071e440ba`) |
+| `overlay/…/hostapd/patches/930` ACS deferral (PR #25321) | dropped | `d67accc71b` (`171-…block-scan-only-while-a-partner-link-scans`) defers only while a partner has a scan in flight, which is the same fix; `0e1e3a0919` scans all links in one request |
+| `overlay/…/hostapd/patches/904`, `910`, `916` | refreshed | line numbers only |
+| `overlay/…/mac80211/patches/subsys/919`, `960` | dropped | ImmortalWrt subsys `393` and `006` carry the same commits |
+| `overlay/…/mac80211/patches/subsys/` 24 others | refreshed | line numbers only (after the new subsys 001–006, 393–422) |
+| `overlay/…/qualcommbe/patches-6.18/0433` thermal step_wise | dropped | in 6.18.55 |
+| `wifi-scripts/952` 6 GHz security | reduced, renamed `952-wifi-scripts-drop-TKIP-from-the-pairwise-ciphers-on-6-GHz` | PR #23914 merged as `4fed8d3c79`; `encryption_band()` (with `b7930c15b5`, `b5608ead44`) maps every value to SAE, WPA3-EAP or OWE with `wpa=2`, and `iface_auth_type()` sets `ieee80211w=2` on 6 GHz. Left: TKIP is still kept from `+tkip` suffixes, so the filter stays |
+| `wifi-scripts/954`, `955` (PR #24621) | dropped | `1e5d762595` passes all wdev.uc interfaces of a radio in one call and drops `active_ifnames`; `f892303173` makes wdev.uc stop only its own interfaces |
+| `wifi-scripts/950` radio by band | ported | `active_ifnames` is gone from `setup()`; same code |
+| `wifi-scripts/951`, `953`, `956` | refreshed | 951 had an offset; 953 and 956 unchanged |
+| everything else | unchanged | applies without fuzz or offset |
+
+Per-radio MACs with the netifd allocator: `wireless-macaddr.uc` is a copy
+of the old `common.uc` generator. For our wiphy (ath12k 960 publishes
+`addresses[] = { radio0, radio1, radio2 }`, perm address = radio 0,
+`address_mask` 0) it gives radio *n* its own address first and derived
+addresses after that, as before. The radio index it uses is the one in
+the hostapd/wdev config, i.e. the one wifi-scripts 950 resolved. An AP MLD
+takes radio 0's address and shares it with the radio 0 link, as with
+`87623c1e67` before.
+
+Not ours, but relevant: `ae5a064f13` "kernel: restore conntrack notifier
+chains support" lets fullcone NAT and ctnetlink subscribe at the same
+time, which is the conflict behind the nft_fullcone/ctnetlink bug found
+during the PPE work.
+
+Checks, all on `da63f7d6ac` without running `make` (the full build is
+left to CI): the steps of `src-build.sh` up to the staging of `files/`
+(overlay, tree patches with `git apply --check`, wifi-scripts with
+`patch -F0`) succeed; then GNU `patch -p1 -F0` on the unpacked sources,
+in quilt order: kernel 6.18.55 (generic backport/pending/hack plus
+qualcommbe, 545 patches), backports 7.2 (325), hostapd `831364bf02`
+(112), iwinfo, fakeroot and rtpengine: no fuzz, no rejects, and no offsets
+in our patches. The changed `.uc` files pass `ucode -c`; a mock run of
+`encryption_band()` and `parse_encryption()` over 16 encryption values on
+6 GHz gives SAE/EAP2/OWE with `wpa=2` and no TKIP.
 
 ---
 
@@ -90,7 +152,7 @@ the default.
 |---|---|---|---|---|
 | `950-wifi-scripts-resolve-multi-radio-index-by-band.patch` | [OpenWrt PR #24639](https://github.com/openwrt/openwrt/pull/24639) `a3b3bb572f` (Jose Tejera), with its review findings fixed | After each boot, maps `wireless.radioN.band` to the radio whose `freq_ranges` cover that band ([#24370](https://github.com/openwrt/openwrt/issues/24370)). | PR open. Labelled "unsafe" by its own author, and nbd has rejected band matching before. See below. | yes. The PR alone also applies (offset 2), but it is buggy: it resolves the index after `phy_suffix`/`ifname_prefix` are derived, and it does not keep the null/-1 sentinel. |
 | `951-wifi-scripts-never-apply-world-country-00.patch` | Minimal rewrite of [SBE1V1K_immortalwrt_NSS](https://cnb.cool/minihuber/SBE1V1K_immortalwrt_NSS) `32136c496d`. yintaomu instead hard-coded `US` | ImmortalWrt's `mac80211.uc` writes `country='00'` on 6 GHz and enables every interface. The patch stops `iw reg set 00` from resetting the shared regdomain and stops the 6 GHz radio's `00` being copied into every hostapd config (`country_code=00` is rejected). It prefers the radio's own country. | Not upstream, and ImmortalWrt-specific in practice (OpenWrt disables 5/6 GHz without a country). | yes |
-| `952-wifi-scripts-use-SAE-WPA3-EAP-for-WPA2-only-6GHz-APs.patch` | Round 1: runtime version of NSS `534e227e70`. Round 2: replaced by [OpenWrt PR #23914](https://github.com/openwrt/openwrt/pull/23914) plus `wpa=2` on 6 GHz, see [wifi.md](wifi.md) | On 6 GHz only: `psk`→`sae` and `eap`→`eap2`, so PMF is required. The scripts already did `psk-sae`→`sae` and `eap-eap2`→`eap2`. The default `owe` on 6 GHz already sets `ieee80211w=2`. | Not upstream | yes |
+| `952-wifi-scripts-use-SAE-WPA3-EAP-for-WPA2-only-6GHz-APs.patch` (since 2026-10-12 only the TKIP filter, `952-wifi-scripts-drop-TKIP-from-the-pairwise-ciphers-on-6-GHz.patch`) | Round 1: runtime version of NSS `534e227e70`. Round 2: replaced by [OpenWrt PR #23914](https://github.com/openwrt/openwrt/pull/23914) plus `wpa=2` on 6 GHz, see [wifi.md](wifi.md) | On 6 GHz only: `psk`→`sae` and `eap`→`eap2`, so PMF is required. The scripts already did `psk-sae`→`sae` and `eap-eap2`→`eap2`. The default `owe` on 6 GHz already sets `ieee80211w=2`. | Not upstream | yes |
 
 How the 950 resolver was chosen among four candidates:
 

@@ -161,8 +161,8 @@ GNU `patch -F0` over the full series:
 | File | Source | Fixes | Notes |
 |---|---|---|---|
 | `0006-sbe1v1k-dts-qcn9274-host-ddr.patch` | this repo (layout from the NSS repo / stock DTB) | T6 DTS part, see above | Touches only `reserved-memory` and the three `wifi@0` nodes of `ipq9570-sbe1v1k.dts`. Generated against the tree with 0001+0002 applied. **test** |
-| `0010-wifi-scripts-fsync-board.json-before-replacing-it.patch` | [OpenWrt PR #25471](https://github.com/openwrt/openwrt/pull/25471) head `436b4d6b14` (Patrick Lawler) | A power cut within ~30 s of a board.json rewrite can leave an empty `/etc/board.json` on UBIFS ("PHY is undefined" forever) (W9) | unchanged. busybox `fsync` is enabled by default (`BUSYBOX_DEFAULT_FSYNC=y`). Our rootfs is on eMMC, where a delayed write can leave the same empty file |
-| `0011-wifi-scripts-keep-board.json-entries-of-phys-not-up-yet.patch` | [OpenWrt PR #25473](https://github.com/openwrt/openwrt/pull/25473) head `bd091da887` (Patrick Lawler, latest on 2026-09-30) | board.json is rewritten 2–3 times per boot while phys are still probing, and entries of phys that are not up yet are dropped (W9) | rebased on 0010: both PRs bump `PKG_RELEASE` 2→3, so 0011 bumps 3→4. `wifi-detect.uc` hunks unchanged |
+| `0010-wifi-scripts-fsync-board.json-before-replacing-it.patch` | [OpenWrt PR #25471](https://github.com/openwrt/openwrt/pull/25471) head `436b4d6b14` (Patrick Lawler) | A power cut within ~30 s of a board.json rewrite can leave an empty `/etc/board.json` on UBIFS ("PHY is undefined" forever) (W9) | unchanged. busybox `fsync` is enabled by default (`BUSYBOX_DEFAULT_FSYNC=y`). Our rootfs is on eMMC, where a delayed write can leave the same empty file **Dropped 2026-10-12:** ImmortalWrt `0a91f73d53`/`220bdab34e` keep board.json in tmpfs; PR closed |
+| `0011-wifi-scripts-keep-board.json-entries-of-phys-not-up-yet.patch` | [OpenWrt PR #25473](https://github.com/openwrt/openwrt/pull/25473) head `bd091da887` (Patrick Lawler, latest on 2026-09-30) | board.json is rewritten 2–3 times per boot while phys are still probing, and entries of phys that are not up yet are dropped (W9) | rebased on 0010: both PRs bump `PKG_RELEASE` 2→3, so 0011 bumps 3→4. `wifi-detect.uc` hunks unchanged **Dropped 2026-10-12:** same as 0010; PR closed |
 
 Both touch only `files/usr/share/hostap/wifi-detect.uc` and the Makefile, and
 our wifi-scripts 950–952 touch only `files-ucode/`. So the two sets are
@@ -281,7 +281,7 @@ section) and 980–983.
 | `916` suppress chanctx warning for debugfs reset | 7.2.y 7aca529c0d8d | Johannes Berg | WARN on a debugfs-triggered HW restart | clean |
 | `917` abort chanswitch when leaving a mesh | 7.2.y d222fdc973bb | Johannes Berg | **mesh**: crash in CSA finalize when the mesh is left during a channel switch | clean |
 | `918` reset state when starting AP fails | 7.2.y 6eac225f59c1 | Johannes Berg | **AP**: after a failed AP start, a later scan restarts beaconing on the dead interface (WARN/crash) | clean |
-| `919` reset the LED state when ifup fails | 7.2.y de6f9561db57 | Johannes Berg | LED TPT timer left running | clean |
+| `919` reset the LED state when ifup fails | 7.2.y de6f9561db57 | Johannes Berg | LED TPT timer left running | clean **Dropped 2026-10-12:** ImmortalWrt subsys/393, same commit |
 | `920` only operate on TDLS peers in the TDLS code | 7.2.y 0cd452ccaa5c | Johannes Berg | STA: TDLS ops on the AP station | clean |
 | `921` unlist vifs when their netdev is unregistered | 7.2.y 821bab0456df | Johannes Berg | use-after-free when a netns holding the wiphy dies | clean |
 | `922` don't allow injecting frames wider than the chanctx | 7.2.y c69718519a81 | Johannes Berg | monitor injection with a too-wide bandwidth | clean |
@@ -322,7 +322,7 @@ section) and 980–983.
 | `957` shut down RX BA session timer on teardown | wireless.git e588e83e5c7a | Zhao Li | use-after-free of the BA session timer | clean |
 | `958` preserve hidden-group beacon IE ownership | wireless.git cc45f313d855 | Zhao Li | double free of borrowed beacon IEs after a channel switch | clean |
 | `959` prevent AP VLAN tx from other interfaces | wireless.git 7f93ca31f7fd | Felix Fietkau | **VLAN isolation**: a unicast frame sent on one VLAN interface reaches a station of another VLAN of the same BSS | clean |
-| `960` set info->band for 802.3 encap offload frames | wireless.git 4febc02cd02f | Felix Fietkau | **ath12k (encap offload)**: rate lookup uses band 0 for 802.3 frames on non-MLD interfaces | clean |
+| `960` set info->band for 802.3 encap offload frames | wireless.git 4febc02cd02f | Felix Fietkau | **ath12k (encap offload)**: rate lookup uses band 0 for 802.3 frames on non-MLD interfaces | clean **Dropped 2026-10-12:** ImmortalWrt subsys/006 (`18d0619283`), same commit |
 | `961` reject invalid 320 MHz CSA bandwidth | wireless.git 56e236759f0a | Ruide Cao | STA: uninitialised width from a bogus CSA | clean |
 | `962` fix slab-out-of-bounds read in `ieee80211_monitor_select_queue()` | wireless.git 6f63e919fe1e | Cen Zhang | monitor injection over-read | clean |
 | `963` fix RCU dereference in throughput estimate | mainline aa0069bd920a | Johannes Berg | fixes OpenWrt's own subsys/361 (lockdep) | **adapted** to the older form of 361 OpenWrt carries |
@@ -494,7 +494,7 @@ country exists (our wifi-scripts 951 still handles `00`).
 
 | File | Source | Author | Fixes | Notes |
 |---|---|---|---|---|
-| `071-VLAN-increase-netlink-buffer-size` | OpenWrt main c071e440ba | Felix Fietkau | dynamic VLAN netlink socket overflows during reconfiguration bursts ("No buffer space available"), VLAN events lost | OpenWrt file name kept so it disappears on the next ImmortalWrt sync; hunk line numbers refreshed |
+| `071-VLAN-increase-netlink-buffer-size` | OpenWrt main c071e440ba | Felix Fietkau | dynamic VLAN netlink socket overflows during reconfiguration bursts ("No buffer space available"), VLAN events lost | OpenWrt file name kept so it disappears on the next ImmortalWrt sync; hunk line numbers refreshed **Dropped 2026-10-12:** ImmortalWrt carries the same file |
 | `900-WNM-Fix-WNM-sleep-mode-support-for-larger-group-mana` | hostap 1faad63cd | Jouni Malinen | heap overflow with WNM sleep mode + BIP-GMAC/CMAC-256 | clean |
 | `901-WNM-Fix-subelement-length-check-WNM-sleep-mode-exit` | hostap dd81452ef | Jouni Malinen | STA over-read on a malformed WNM sleep exit | clean |
 | `902-WNM-Fix-group-key-parsing-from-WNM-sleep-mode-exit` | hostap a0528607c | Jouni Malinen | STA ignores BIGTK with 256-bit group management ciphers | needs 901 |
@@ -513,7 +513,7 @@ country exists (our wifi-scripts 951 still handles `00`).
 | `915-EAP-PEAP-server-Fix-NULL-deref-on-TLS-encrypt-failur` | hostap 0da59aadc | Brandon Arrendondo | PEAP server crash on resumed TLS 1.3 when encryption fails | clean |
 | `916-nl80211-Update-AP-MLD-active_links-bitmap-during-sta` | hostap 4a9a301a2 | Manish Dharanenthiran | **MLO**: active_links not set on START_AP, link stop/remove works on a stale bitmap | clean |
 | `917-nl80211-Add-FT-SAE-AKMs-to-the-fallback-key_mgmt-cap` | hostap 43ee60e13 | Wei Zhang | wpa_supplicant never selects FT-SAE on drivers without AKM lists (mac80211) | clean; STA |
-| `930-AP-MLD-Break-the-mutual-ACS-deferral-between-partner` | [OpenWrt PR #25321](https://github.com/openwrt/openwrt/pull/25321) head 21956d2836 | Nilanka de Silva | **MLO + ACS**: with `channel=auto` on two or more links, each link defers to the other until the retry cap, then one link is disabled | renumbered from 361, unchanged |
+| `930-AP-MLD-Break-the-mutual-ACS-deferral-between-partner` | [OpenWrt PR #25321](https://github.com/openwrt/openwrt/pull/25321) head 21956d2836 | Nilanka de Silva | **MLO + ACS**: with `channel=auto` on two or more links, each link defers to the other until the retry cap, then one link is disabled | renumbered from 361, unchanged **Dropped 2026-10-12:** ImmortalWrt `d67accc71b` (hostapd 171) defers only while a partner scans, the same fix |
 | `931-AP-find-unassociated-MLD-stations-in-ap_get_link_sta` | [OpenWrt PR #24878](https://github.com/openwrt/openwrt/pull/24878) head aede7845d1 | Alexander Astrovsky | **MLO**: auth TX status of an MLD STA re-authenticating from a new link address is not matched, so WLAN_STA_AUTH is never set | renumbered from 195; `!is_zero_ether_addr` guard added as asked in review |
 | `950-mesh-restart-peering-when-the-driver-lost-a-known-peer` | own work | Crescentm | see the mesh section | **test** |
 | `980-AP-keep-the-configured-width-on-5-6-GHz-if-the-20-40` | own work | Crescentm | 5/6 GHz falls back to HT20 when the 20/40 coexistence scan cannot be requested (EBUSY retries exhausted; three radios share one wiphy) and `noscan` was cleared | **test**. On 5/6 GHz `check_40mhz_5g()` can only swap primary/secondary, never forbid 40 MHz, so skipping it equals `noscan=1`; 2.4 GHz keeps the HT20 fallback |
@@ -525,24 +525,25 @@ needs 901.
 
 | File | Source | Author | Fixes | Notes |
 |---|---|---|---|---|
-| `0012-hostapd-backport-DPP-fixes-from-OpenWrt-main` | OpenWrt main fcd9dbf534, 27b8aa25f8, 24723ba310 + [PR #25509](https://github.com/openwrt/openwrt/pull/25509) head 70927026ba | Felix Fietkau; Andrea Pesaresi | DPP GAS comeback via ucode; DPP answered on the wrong MLD link; chirp field misnamed; 27b8aa25f8 breaks the build without 802.11be (#25509) | four commits in one mbox |
-| `0013-hostapd-backport-MLD-reconfiguration-fixes-from-OpenWrt-main` | OpenWrt main 79444dcc68, 4c6992b13b, 87623c1e67, 9a81bf528d, b833ad3511 | Felix Fietkau | **MLO**: MLD and BSSes torn down on SSID-level changes; duplicate BSSID on reload; radio-0 link without the MLD address (~30 % unicast loss); control socket not moved on rename; uninitialised rename result | the 2026-09-29 MLD batch |
-| `0014-hostapd-backport-ubus-BTM-and-MBO-methods-from-OpenWrt-main` | OpenWrt main aa99fb89a0, 400c79e6b6 | Felix Fietkau | feature sync: `mbo_assoc_disallow`, BTM query answering, beacon_req channel reports (used by steering daemons) | can be dropped on its own; 0016 applies without it |
-| `0015-wifi-scripts-backport-fixes-from-OpenWrt-main` | OpenWrt main 54a6f4ee1e, 2de3225246 | Felix Fietkau | "dpp is not present in the schema"; regdomain from the provisioning partition (survives factory reset) | clean against ImmortalWrt's `mac80211.uc` |
-| `0016-hostapd-fix-memory-leaks-and-a-NULL-dereference-in-ubus-code` | [OpenWrt PR #25339](https://github.com/openwrt/openwrt/pull/25339) head ab8903a1a3 (4 commits) + local refresh | Matthew Cather; Crescentm | rfkill config leaked per interface; assoc frame taxonomy leaked per STA; BTM neighbour list leaked; NULL ubus ctx in VLAN teardown (crash) | 5th entry refreshes the line numbers of the package's 601/803 |
-| `0017-wifi-scripts-fix-macaddr-random-on-MLO-interfaces` | [OpenWrt PR #24955](https://github.com/openwrt/openwrt/pull/24955) head 6d18f7aff8 | Kamil Bienkiewicz | `macaddr random` on an MLO iface: "Failed to create MLD … invalid MAC address" | Makefile bump dropped. The MLD address is redrawn on every reload (documented in the PR) |
-| `0019-hostapd-bump-PKG_RELEASE` | own | Crescentm | hostapd 3 → 4, so our feed's hostapd differs from ImmortalWrt's | conflicts if ImmortalWrt bumps; then drop it |
+| `0012-hostapd-backport-DPP-fixes-from-OpenWrt-main` | OpenWrt main fcd9dbf534, 27b8aa25f8, 24723ba310 + [PR #25509](https://github.com/openwrt/openwrt/pull/25509) head 70927026ba | Felix Fietkau; Andrea Pesaresi | DPP GAS comeback via ucode; DPP answered on the wrong MLD link; chirp field misnamed; 27b8aa25f8 breaks the build without 802.11be (#25509) | four commits in one mbox **Dropped 2026-10-12:** all four in ImmortalWrt (#25509 as `909be7c9fa`) |
+| `0013-hostapd-backport-MLD-reconfiguration-fixes-from-OpenWrt-main` | OpenWrt main 79444dcc68, 4c6992b13b, 87623c1e67, 9a81bf528d, b833ad3511 | Felix Fietkau | **MLO**: MLD and BSSes torn down on SSID-level changes; duplicate BSSID on reload; radio-0 link without the MLD address (~30 % unicast loss); control socket not moved on rename; uninitialised rename result | the 2026-09-29 MLD batch **Dropped 2026-10-12:** in ImmortalWrt |
+| `0014-hostapd-backport-ubus-BTM-and-MBO-methods-from-OpenWrt-main` | OpenWrt main aa99fb89a0, 400c79e6b6 | Felix Fietkau | feature sync: `mbo_assoc_disallow`, BTM query answering, beacon_req channel reports (used by steering daemons) | can be dropped on its own; 0016 applies without it **Dropped 2026-10-12:** in ImmortalWrt |
+| `0015-wifi-scripts-backport-fixes-from-OpenWrt-main` | OpenWrt main 54a6f4ee1e, 2de3225246 | Felix Fietkau | "dpp is not present in the schema"; regdomain from the provisioning partition (survives factory reset) | clean against ImmortalWrt's `mac80211.uc` **Dropped 2026-10-12:** in ImmortalWrt |
+| `0016-hostapd-fix-memory-leaks-and-a-NULL-dereference-in-ubus-code` | [OpenWrt PR #25339](https://github.com/openwrt/openwrt/pull/25339) head ab8903a1a3 (4 commits) + local refresh | Matthew Cather; Crescentm | rfkill config leaked per interface; assoc frame taxonomy leaked per STA; BTM neighbour list leaked; NULL ubus ctx in VLAN teardown (crash) | 5th entry refreshes the line numbers of the package's 601/803 **2026-10-12:** the neighbour-list commit is dropped (ImmortalWrt `47f3de3540`); the other three are kept, the 5th entry now refreshes 601, 605 and 803 |
+| `0017-wifi-scripts-fix-macaddr-random-on-MLO-interfaces` | [OpenWrt PR #24955](https://github.com/openwrt/openwrt/pull/24955) head 6d18f7aff8 | Kamil Bienkiewicz | `macaddr random` on an MLO iface: "Failed to create MLD … invalid MAC address" | Makefile bump dropped. The MLD address is redrawn on every reload (documented in the PR) **2026-10-12:** ported onto the netifd MAC allocator; still needed |
+| `0019-hostapd-bump-PKG_RELEASE` | own | Crescentm | hostapd 3 → 4, so our feed's hostapd differs from ImmortalWrt's | conflicts if ImmortalWrt bumps; then drop it **2026-10-12:** ImmortalWrt bumped hostapd to 4; replaced by `0019-hostapd-wifi-scripts-bump-PKG_RELEASE` (hostapd 4 → 5, wifi-scripts 3 → 4) |
 
 wifi-scripts `PKG_RELEASE` is not bumped again: 0010/0011 already take it to 4.
+(Since 2026-10-12 0010/0011 are gone and 0019 bumps wifi-scripts too.)
 
 ### wifi-scripts → `patches/wifi-scripts/`
 
 | File | Source | Author | Fixes | Notes |
 |---|---|---|---|---|
-| `952-wifi-scripts-use-SAE-WPA3-EAP-for-WPA2-only-6GHz-APs` | [OpenWrt PR #23914](https://github.com/openwrt/openwrt/pull/23914) head eb7da52137 + `wpa=2` | Michael Pfeifroth; Crescentm | 6 GHz AP refused with psk/eap/wpa/psk-mixed/wpa-mixed | **rewritten** (file name kept): the PR's code (`psk`/`psk-sae` → `sae`, `eap`/`eap-eap2` → `eap2`) replaces our round-1 code, plus `config.wpa = 2` on 6 GHz, because the PR alone still leaves `wpa=1/3` for psk-mixed/wpa/wpa-mixed ("Pre-RSNA security methods are not allowed in 6 GHz", and no PMF for wpa < 2). A mock run over all 13 encryption values gives sae/eap2 with wpa=2; `none` stays 0. If #23914 is merged, 952 shrinks to the wpa line |
+| `952-wifi-scripts-use-SAE-WPA3-EAP-for-WPA2-only-6GHz-APs` | [OpenWrt PR #23914](https://github.com/openwrt/openwrt/pull/23914) head eb7da52137 + `wpa=2` | Michael Pfeifroth; Crescentm | 6 GHz AP refused with psk/eap/wpa/psk-mixed/wpa-mixed | **rewritten** (file name kept): the PR's code (`psk`/`psk-sae` → `sae`, `eap`/`eap-eap2` → `eap2`) replaces our round-1 code, plus `config.wpa = 2` on 6 GHz, because the PR alone still leaves `wpa=1/3` for psk-mixed/wpa/wpa-mixed ("Pre-RSNA security methods are not allowed in 6 GHz", and no PMF for wpa < 2). A mock run over all 13 encryption values gives sae/eap2 with wpa=2; `none` stays 0. If #23914 is merged, 952 shrinks to the wpa line **2026-10-12:** #23914 merged (`4fed8d3c79`) and ImmortalWrt maps all 6 GHz modes itself; reduced to the TKIP filter and renamed `952-wifi-scripts-drop-TKIP-from-the-pairwise-ciphers-on-6-GHz` |
 | `953-wifi-scripts-fix-handling-for-0-dBm-TX-power-setting` | [OpenWrt PR #25479](https://github.com/openwrt/openwrt/pull/25479) head 9f2d64a219 | Shiji Yang | `txpower=0` became `auto` (full power) | Makefile bump dropped; #24637 is a duplicate |
-| `954-wifi-scripts-fix-wdev-fallback-to-use-sprintf-instead-of-printf` | [OpenWrt PR #24621](https://github.com/openwrt/openwrt/pull/24621) e22c137bee | Alexander Astrovsky | wdev fallback (mesh without wpa_supplicant mesh support, monitor): only the last iface per radio is set up, stale ifaces never removed | |
-| `955-wifi-scripts-fix-active_ifnames-for-OWE-transition-interfaces` | [OpenWrt PR #24621](https://github.com/openwrt/openwrt/pull/24621) 2589982754 | Alexander Astrovsky | OWE transition ifname missing from the wdev keep list | needs 954 |
+| `954-wifi-scripts-fix-wdev-fallback-to-use-sprintf-instead-of-printf` | [OpenWrt PR #24621](https://github.com/openwrt/openwrt/pull/24621) e22c137bee | Alexander Astrovsky | wdev fallback (mesh without wpa_supplicant mesh support, monitor): only the last iface per radio is set up, stale ifaces never removed | **Dropped 2026-10-12:** ImmortalWrt `1e5d762595` passes all interfaces in one call, `f892303173` |
+| `955-wifi-scripts-fix-active_ifnames-for-OWE-transition-interfaces` | [OpenWrt PR #24621](https://github.com/openwrt/openwrt/pull/24621) 2589982754 | Alexander Astrovsky | OWE transition ifname missing from the wdev keep list | needs 954 **Dropped 2026-10-12:** `active_ifnames` is gone (`1e5d762595`) |
 
 ### Not taken (hostapd / wifi-scripts)
 
@@ -680,3 +681,66 @@ Known and left as is:
 - ath12k 978 has no fallback to DMA chunks if a reserved region is too
   small (check the boot log for "host-ddr-mem too small" / "no
   mlo-global-mem").
+
+# Rebase onto ImmortalWrt `da63f7d6ac` (2026-10-12)
+
+Base: ImmortalWrt master `da63f7d6ac`, kernel 6.18.55, mac80211 =
+backports 7.2 `PKG_RELEASE:=5`, hostapd `831364bf02` `PKG_RELEASE:=4`
+(5 with our 0019), wifi-scripts `PKG_RELEASE:=3` (4 with our 0019),
+iwinfo `66bdd1a0`. The per-patch verdicts are in
+[README.md](README.md#rebase-onto-immortalwrt-da63f7d6ac-2026-10-12).
+In short: tree 0010–0015, hostapd 071 and 930, subsys 919 and 960,
+wifi-scripts 954 and 955 are dropped because ImmortalWrt has them or an
+equivalent; 0016 lost one commit; 0017 and wifi-scripts 950 were ported;
+952 shrank to the TKIP filter; 0019 now bumps hostapd and wifi-scripts;
+the remaining hostapd and subsys patches were refreshed (line numbers).
+The ath12k series, iwinfo 101, hostapd 900–917, 931, 950, 980 and subsys
+900–983 (except 919/960) are otherwise unchanged.
+
+What changed under our patches:
+
+- **MAC addresses** are now allocated by netifd (`090afc220f`,
+  `eb8cbaeebd`, `wireless-macaddr.uc`). Its generator is the old
+  `common.uc` one, so with ath12k 960 each radio still gets its own DT
+  address, and the radio index comes from the hostapd/wdev config, which
+  wifi-scripts 950 has already resolved. hostapd, wpa_supplicant and
+  wdev.uc must come from the same build as wifi-scripts (hostapd.uc
+  imports common.uc); our feed ships both.
+- **board.json** is in tmpfs (`/tmp/sysinfo/board.json`, with
+  `/etc/board.json` a symlink and the board.d data in
+  `/etc/board-base.json`). wifi-scripts 956 still matters: the first
+  `/etc/config/wireless` is written by the hotplug handler after netifd
+  started.
+- **6 GHz security** is done by ImmortalWrt (`encryption_band()` maps
+  every mode to SAE, WPA3-EAP or OWE; `ieee80211w=2` on 6 GHz). Our 952
+  only removes TKIP left over from a `+tkip` suffix.
+- **AP MLD ACS** (hostapd 171/172) replaces our 930.
+
+Checks (no `make`; CI does the build): see the README section.
+
+## Rebase: hardware re-test checklist
+
+Use the initramfs image first. Items 1–4 are new with this base:
+
+1. **Per-radio MACs:** `iw dev` shows the three DT/nvmem addresses on the
+   first AP of 2.4, 5 and 6 GHz, and derived (locally administered)
+   addresses for further BSSes of each radio;
+   `ubus call network.wireless macaddr_list` lists one entry per BSS
+   without conflicts. With an MLO SSID the MLD and its radio 0 link carry
+   radio 0's address. `wifi reload` and `wifi down; wifi up` keep the
+   addresses.
+2. **Band mapping:** each `wireless.radioN` comes up on its configured
+   band; `logread | grep "Band .*: radio"` is empty (with ath12k 920 no
+   remap is expected), and swapping two `radio` options in the config is
+   corrected at the next `wifi`.
+3. **6 GHz security:** psk2, psk-mixed, psk2+tkip, wpa2 and none on
+   6 GHz come up; the generated `/var/run/hostapd-phy*.conf` has `wpa=2`,
+   `ieee80211w=2`, SAE, WPA-EAP-SHA256 or OWE, and `wpa_pairwise=CCMP`.
+4. **First boot:** after `firstboot` (or a RAM boot without config) all
+   three radios come up without a manual `wifi`; `/etc/board.json` is a
+   symlink into `/tmp/sysinfo`; a reboot does not rewrite anything under
+   `/etc` for WiFi.
+5. `macaddr random` on an MLO iface (0017): the MLD comes up; the link
+   and MLD addresses change on each reload.
+6. Repeat items 1, 3 and 7 of the round 2 checklist (bring-up cycles,
+   MLO AP, dynamic VLAN with the NULL ctx fix of 0016).

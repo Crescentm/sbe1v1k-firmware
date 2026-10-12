@@ -4,9 +4,19 @@ Kernel, PPE/EDMA, PHY and DTS changes for the SBE1V1K. They sit on top of
 ImmortalWrt master `bf156b68e3` plus `tree/0001`–`0002`. Status checked on
 2026-10-01.
 
+**2026-10-12:** rebased onto ImmortalWrt master `da63f7d6ac` (kernel
+6.18.55). K1 (`tree/0003`) and R4e (`0433`) are dropped: ImmortalWrt has
+6.18.55 (`db9616b9af`), and 6.18.55 contains `ec0d89150a93`. Everything
+else here applies unchanged to 6.18.55: GNU `patch -p1 -F0` over the
+unpacked `linux-6.18.55.tar.xz` with the generic and qualcommbe files
+copied in, all generic backport/pending/hack patches (with our 744) and
+all qualcommbe patches (with ours), 545 in total, no fuzz, no offset. The
+DTS patches (`tree/0002`, `0004`–`0006`, `0030`, `0031`) apply with
+`git apply` unchanged. See [README.md](README.md#rebase-onto-immortalwrt-da63f7d6ac-2026-10-12).
+
 | Item | Files |
 |---|---|
-| K1 kernel 6.18.54 | `tree/0003-kernel-bump-6.18-to-6.18.54.patch` |
+| ~~K1 kernel 6.18.54~~ (dropped 2026-10-12, ImmortalWrt is on 6.18.55) | ~~`tree/0003-kernel-bump-6.18-to-6.18.54.patch`~~ |
 | K2 EDMA Rx skb reuse | `overlay/target/linux/qualcommbe/patches-6.18/0410-net-ethernet-qualcomm-ppe-fix-freed-skb-reuse-in-rx-reaping.patch` |
 | K3 NAPI budgets | `overlay/.../patches-6.18/0363-net-ethernet-qualcomm-honor-safe-NAPI-budgets.patch` |
 | K3 NAPI disable hang | `overlay/.../patches-6.18/0411-net-ethernet-qualcomm-ppe-track-NAPI-enable-state.patch` |
@@ -44,7 +54,8 @@ order. 0363 lands right after 0362.
   The toolchain's kernel-headers build then unpacked that tarball.
 - **Risk:** low. This is a stable update that OpenWrt has merged.
 - **Upstream:** merged in OpenWrt main. Drop 0003 once ImmortalWrt master
-  merges it.
+  merges it. **Dropped on 2026-10-12:** ImmortalWrt `db9616b9af` moved to
+  6.18.55.
 
 ## K2: 0410 EDMA Rx freed-skb reuse (double free)
 
@@ -327,7 +338,7 @@ others.
 | R4b phylink PCS validation | fix | `overlay/.../patches-6.18/0429` |
 | R4c qca808x active-high LEDs | fix | `overlay/.../patches-6.18/0430`, `0431` |
 | R4d MP5496 supply names | fix | `overlay/.../patches-6.18/0432` |
-| R4e thermal step_wise stale vote | fix | `overlay/.../patches-6.18/0433` |
+| R4e thermal step_wise stale vote | dropped 2026-10-12 (in 6.18.55) | was `overlay/.../patches-6.18/0433` |
 | R4f dtc warnings | fix | `tree/0030-sbe1v1k-dts-fix-dtc-warnings.patch` |
 | R5 fan PWM 1 kHz | dropped | was `tree/0032-sbe1v1k-dts-fan-pwm-1khz.patch` |
 | R6 rtpengine kmod on 6.18 | fix | `overlay/feeds/telephony/net/rtpengine/patches/105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch` |
@@ -510,7 +521,8 @@ TXMAC_EN off first on link down, set it last on link up).
   queue). Our fan maps use lower = upper = 1/2/3 on one zone, so a quick
   temperature drop across two trips could leave the fan one step too
   high. **Drop it when the kernel moves to 6.18.55**, which should carry
-  it.
+  it. **Dropped on 2026-10-12:** 6.18.55 has it (the patch no longer
+  applies; `drivers/thermal/gov_step_wise.c` already has the new code).
 - **tree/0030 dtc warnings:** see the next section.
 - **Checked and not taken:**
   - 2026 dts: `bd2dc325db8c` (USB wrapper IRQs, only for dtbs_check and

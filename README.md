@@ -22,7 +22,7 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 | PPE 驱动的 double free、NAPI 卡死、端口回滚越界、MTU 先改后校验 | PPE/EDMA 修复（OpenWrt PR #24191、#25405 等） |
 | WAN 灯乱闪 | RTL8261 LED 驱动支持和 DTS 声明，灯按速率显示 |
 | 5 GHz 退回 20 MHz | 5/6 GHz 关闭 20/40 MHz 共存扫描（`noscan`） |
-| 开机时 `PHY is undefined`、断电后 `board.json` 为空 | wifi-scripts（OpenWrt PR #25471、#25473） |
+| 全新安装后 WiFi 要手动 `wifi` 才起来 | wifi-scripts：首次写入无线配置后重新加载 netifd |
 | ath12k 的 regulatory 超时、越界读写、GTK rekey 掉线等 | 主线 7.3-rc 和 ath-next 的 ath12k 修复 |
 | WiFi 卡拿不到原厂那样的专用内存 | 按原厂给三块 QCN9274 各预留 50 MiB host DDR |
 | 看门狗重启后看不出重启原因 | 主线 qcom-wdt bootstatus 支持和 IMEM 节点 |
@@ -32,10 +32,11 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 | rtpengine 内核模块在新内核上编不过 | Kbuild 修复（rtpengine 上游 `38700abf0b79`） |
 | mac80211/cfg80211 的 use-after-free、mesh、CSA、VLAN 等问题 | Linux 7.2.y 稳定版、7.3-rc 和 wireless.git 的全部相关修复 |
 | ath12k 的 MLO、SSR、TX DMA、扫描死锁、监听模式等问题 | 主线、ath-next 和邮件列表的 ath12k 修复；MLO 崩溃恢复等较新的放在测试档 |
-| hostapd 的 MLD 重配置、DPP、ACS 死锁、内存越界等问题 | OpenWrt main 的 hostapd/wifi-scripts 修复和 hostap.git 2.12 之后的修复 |
-| 6 GHz 上 psk-mixed/wpa 起不来、0 dBm 发射功率无效、MLO 下 `macaddr random` 无效 | wifi-scripts 修复（OpenWrt PR #23914、#25479、#24955 等） |
+| hostapd 的 MLO 重新认证、内存越界、内存泄漏、ubus 空指针等问题 | hostap.git 2.12 之后的修复和 OpenWrt PR #24878、#25339 |
+| 6 GHz 上带 TKIP 的加密起不来、0 dBm 发射功率无效、MLO 下 `macaddr random` 无效 | wifi-scripts 修复（OpenWrt PR #25479、#24955 等） |
 
-每个补丁的来源、原作者和上游状态见 [patches/README.md](patches/README.md)。标为**测试档**的补丁各自独立，
+每个补丁的来源、原作者和上游状态见 [patches/README.md](patches/README.md)。补丁最近一次对照的是
+ImmortalWrt master `da63f7d6ac`（2026-10-12，内核 6.18.55）。标为**测试档**的补丁各自独立，
 出问题时可以单独删掉。
 
 预装：中文 LuCI、fullcone NAT、UPnP、SQM（cake）、WireGuard、irqbalance 及常用诊断工具，
