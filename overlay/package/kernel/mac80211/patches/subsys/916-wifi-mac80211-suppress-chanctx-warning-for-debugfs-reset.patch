@@ -25,11 +25,9 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/mac80211/pm.c          | 8 +++++---
  4 files changed, 8 insertions(+), 6 deletions(-)
 
-diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
-index 9907199..0921552 100644
 --- a/net/mac80211/cfg.c
 +++ b/net/mac80211/cfg.c
-@@ -3473,7 +3473,7 @@ static int ieee80211_set_txq_params(struct wiphy *wiphy,
+@@ -3483,7 +3483,7 @@ static int ieee80211_set_txq_params(stru
  static int ieee80211_suspend(struct wiphy *wiphy,
  			     struct cfg80211_wowlan *wowlan)
  {
@@ -38,11 +36,9 @@ index 9907199..0921552 100644
  }
  
  static int ieee80211_resume(struct wiphy *wiphy)
-diff --git a/net/mac80211/debugfs.c b/net/mac80211/debugfs.c
-index 622d710..dfc053f 100644
 --- a/net/mac80211/debugfs.c
 +++ b/net/mac80211/debugfs.c
-@@ -404,7 +404,7 @@ static ssize_t reset_write(struct file *file, const char __user *user_buf,
+@@ -404,7 +404,7 @@ static ssize_t reset_write(struct file *
  
  	rtnl_lock();
  	wiphy_lock(local->hw.wiphy);
@@ -51,11 +47,9 @@ index 622d710..dfc053f 100644
  	ret = __ieee80211_resume(&local->hw);
  	wiphy_unlock(local->hw.wiphy);
  
-diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
-index 551eb2d..7a24803 100644
 --- a/net/mac80211/ieee80211_i.h
 +++ b/net/mac80211/ieee80211_i.h
-@@ -2437,7 +2437,7 @@ int ieee80211_reconfig(struct ieee80211_local *local);
+@@ -2441,7 +2441,7 @@ int ieee80211_reconfig(struct ieee80211_
  void ieee80211_stop_device(struct ieee80211_local *local, bool suspend);
  
  int __ieee80211_suspend(struct ieee80211_hw *hw,
@@ -64,11 +58,9 @@ index 551eb2d..7a24803 100644
  
  static inline int __ieee80211_resume(struct ieee80211_hw *hw)
  {
-diff --git a/net/mac80211/pm.c b/net/mac80211/pm.c
-index 5a508d9..f63676c 100644
 --- a/net/mac80211/pm.c
 +++ b/net/mac80211/pm.c
-@@ -18,7 +18,8 @@ static void ieee80211_sched_scan_cancel(struct ieee80211_local *local)
+@@ -18,7 +18,8 @@ static void ieee80211_sched_scan_cancel(
  	cfg80211_sched_scan_stopped_locked(local->hw.wiphy, 0);
  }
  
@@ -78,7 +70,7 @@ index 5a508d9..f63676c 100644
  {
  	struct ieee80211_local *local = hw_to_local(hw);
  	struct ieee80211_sub_if_data *sdata;
-@@ -166,9 +167,10 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
+@@ -166,9 +167,10 @@ int __ieee80211_suspend(struct ieee80211
  
  	/*
  	 * We disconnected on all interfaces before suspend, all channel

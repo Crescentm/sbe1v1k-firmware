@@ -21,11 +21,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  net/wireless/nl80211.c | 1 -
  1 file changed, 1 deletion(-)
 
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index 3f1ba1e..efce3a1 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -9413,7 +9413,6 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+@@ -9573,7 +9573,6 @@ static int nl80211_new_station(struct sk
  
  	switch (wdev->iftype) {
  	case NL80211_IFTYPE_AP:

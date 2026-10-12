@@ -26,11 +26,9 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
  src/drivers/driver_nl80211_event.c | 27 ++++++++++++++++++++++++++-
  3 files changed, 39 insertions(+), 6 deletions(-)
 
-diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
-index 180eb997a..db3e21556 100644
 --- a/src/drivers/driver_nl80211.c
 +++ b/src/drivers/driver_nl80211.c
-@@ -10477,10 +10477,17 @@ fail:
+@@ -10505,10 +10505,17 @@ fail:
  }
  
  
@@ -51,7 +49,7 @@ index 180eb997a..db3e21556 100644
  
  	if (!(bss->active_links & BIT(link_id))) {
  		wpa_printf(MSG_DEBUG,
-@@ -10521,7 +10528,7 @@ int nl80211_remove_link(struct i802_bss *bss, int link_id)
+@@ -10549,7 +10556,7 @@ int nl80211_remove_link(struct i802_bss
  
  	eloop_cancel_timeout(wpa_driver_nl80211_scan_timeout, drv, bss->ctx);
  	/* Clear the active links and set the flink */
@@ -60,11 +58,9 @@ index 180eb997a..db3e21556 100644
  	bss->valid_links &= ~BIT(link_id);
  
  	if (bss->scan_link == link)
-diff --git a/src/drivers/driver_nl80211.h b/src/drivers/driver_nl80211.h
-index cb982e49c..0989bab08 100644
 --- a/src/drivers/driver_nl80211.h
 +++ b/src/drivers/driver_nl80211.h
-@@ -401,7 +401,8 @@ void nl80211_restore_ap_mode(struct i802_bss *bss);
+@@ -401,7 +401,8 @@ void nl80211_restore_ap_mode(struct i802
  struct i802_link * nl80211_get_link(struct i802_bss *bss, s8 link_id);
  u8 nl80211_get_link_id_from_link(struct i802_bss *bss, struct i802_link *link);
  int nl80211_remove_link(struct i802_bss *bss, int link_id);
@@ -74,11 +70,9 @@ index cb982e49c..0989bab08 100644
  int nl80211_has_ifidx(struct wpa_driver_nl80211_data *drv, int ifidx,
  		      int ifidx_reason);
  
-diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
-index 494dd50a2..aa45e9f6a 100644
 --- a/src/drivers/driver_nl80211_event.c
 +++ b/src/drivers/driver_nl80211_event.c
-@@ -2671,7 +2671,7 @@ static void nl80211_stop_ap(struct i802_bss *bss, struct nlattr **tb)
+@@ -2671,7 +2671,7 @@ static void nl80211_stop_ap(struct i802_
  		ctx = mld_link->ctx;
  
  		/* Bring down the active link */
@@ -116,7 +110,7 @@ index 494dd50a2..aa45e9f6a 100644
  static void do_process_drv_event(struct i802_bss *bss, int cmd,
  				 struct nlattr **tb)
  {
-@@ -5133,6 +5155,9 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
+@@ -5133,6 +5155,9 @@ static void do_process_drv_event(struct
  		nl80211_peer_measurement_complete_event(bss, tb);
  		break;
  #endif /* CONFIG_PR */

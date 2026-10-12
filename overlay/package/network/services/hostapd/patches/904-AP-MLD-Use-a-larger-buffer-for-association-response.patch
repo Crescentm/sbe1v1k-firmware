@@ -13,11 +13,9 @@ Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
  src/ap/ieee802_11.c | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
-diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
-index 2ce49406e..71bf8589f 100644
 --- a/src/ap/ieee802_11.c
 +++ b/src/ap/ieee802_11.c
-@@ -6719,8 +6719,11 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+@@ -6807,8 +6807,11 @@ static u16 send_assoc_resp(struct hostap
  		buflen += 3 + sizeof(struct ieee80211_eht_operation);
  		if (hapd->iconf->punct_bitmap)
  			buflen += EHT_OPER_DISABLED_SUBCHAN_BITMAP_SIZE;

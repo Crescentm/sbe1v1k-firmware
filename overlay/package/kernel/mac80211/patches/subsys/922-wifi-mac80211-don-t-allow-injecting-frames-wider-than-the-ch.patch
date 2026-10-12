@@ -31,11 +31,9 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/mac80211/tx.c      | 28 ++++++++++++++++++++++++++--
  3 files changed, 31 insertions(+), 4 deletions(-)
 
-diff --git a/include/net/mac80211.h b/include/net/mac80211.h
-index b0e50c5..4523972 100644
 --- a/include/net/mac80211.h
 +++ b/include/net/mac80211.h
-@@ -7631,11 +7631,14 @@ bool ieee80211_tx_prepare_skb(struct ieee80211_hw *hw,
+@@ -7642,11 +7642,14 @@ bool ieee80211_tx_prepare_skb(struct iee
   *
   * @skb: packet injected by userspace
   * @dev: the &struct device of this 802.11 device
@@ -51,11 +49,9 @@ index b0e50c5..4523972 100644
  
  /**
   * struct ieee80211_noa_data - holds temporary data for tracking P2P NoA state
-diff --git a/net/mac80211/iface.c b/net/mac80211/iface.c
-index 842bfb4..ca66eb4 100644
 --- a/net/mac80211/iface.c
 +++ b/net/mac80211/iface.c
-@@ -991,7 +991,7 @@ static u16 ieee80211_monitor_select_queue(struct net_device *dev,
+@@ -999,7 +999,7 @@ static u16 ieee80211_monitor_select_queu
  	/* reset flags and info before parsing radiotap header */
  	memset(info, 0, sizeof(*info));
  
@@ -64,11 +60,9 @@ index 842bfb4..ca66eb4 100644
  		return 0; /* doesn't matter, frame will be dropped */
  
  	len_rthdr = ieee80211_get_radiotap_len(skb->data);
-diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
-index 9179bd5..c9a3d5e 100644
 --- a/net/mac80211/tx.c
 +++ b/net/mac80211/tx.c
-@@ -2097,8 +2097,29 @@ static bool ieee80211_validate_radiotap_len(struct sk_buff *skb)
+@@ -2097,8 +2097,29 @@ static bool ieee80211_validate_radiotap_
  	return true;
  }
  
@@ -99,7 +93,7 @@ index 9179bd5..c9a3d5e 100644
  {
  	struct ieee80211_local *local = wdev_priv(dev->ieee80211_ptr);
  	struct ieee80211_radiotap_iterator iterator;
-@@ -2272,6 +2293,9 @@ bool ieee80211_parse_tx_radiotap(struct sk_buff *skb,
+@@ -2272,6 +2293,9 @@ bool ieee80211_parse_tx_radiotap(struct
  		struct ieee80211_supported_band *sband =
  			local->hw.wiphy->bands[info->band];
  
@@ -109,7 +103,7 @@ index 9179bd5..c9a3d5e 100644
  		info->control.flags |= IEEE80211_TX_CTRL_RATE_INJECT;
  
  		for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
-@@ -2471,7 +2495,7 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+@@ -2471,7 +2495,7 @@ netdev_tx_t ieee80211_monitor_start_xmit
  	 * selected chandef above to accurately set injection rates and
  	 * retransmissions.
  	 */

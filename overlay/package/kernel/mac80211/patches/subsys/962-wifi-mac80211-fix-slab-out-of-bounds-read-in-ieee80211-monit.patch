@@ -48,11 +48,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  net/mac80211/tx.c    | 10 +++++-----
  2 files changed, 7 insertions(+), 7 deletions(-)
 
-diff --git a/net/mac80211/iface.c b/net/mac80211/iface.c
-index 889c32f..8894231 100644
 --- a/net/mac80211/iface.c
 +++ b/net/mac80211/iface.c
-@@ -998,8 +998,8 @@ static u16 ieee80211_monitor_select_queue(struct net_device *dev,
+@@ -1006,8 +1006,8 @@ static u16 ieee80211_monitor_select_queu
  
  	len_rthdr = ieee80211_get_radiotap_len(skb->data);
  	hdr = (struct ieee80211_hdr *)(skb->data + len_rthdr);
@@ -63,11 +61,9 @@ index 889c32f..8894231 100644
  		return 0; /* doesn't matter, frame will be dropped */
  
  	return ieee80211_select_queue_80211(sdata, skb, hdr);
-diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
-index a88076c..7d7950c 100644
 --- a/net/mac80211/tx.c
 +++ b/net/mac80211/tx.c
-@@ -2085,7 +2085,7 @@ static bool ieee80211_validate_radiotap_len(struct sk_buff *skb)
+@@ -2085,7 +2085,7 @@ static bool ieee80211_validate_radiotap_
  		(struct ieee80211_radiotap_header *)skb->data;
  
  	/* check for not even having the fixed radiotap header part */
@@ -76,7 +72,7 @@ index a88076c..7d7950c 100644
  		return false; /* too short to be possibly valid */
  
  	/* is it a header version we can trust to find length from? */
-@@ -2093,7 +2093,7 @@ static bool ieee80211_validate_radiotap_len(struct sk_buff *skb)
+@@ -2093,7 +2093,7 @@ static bool ieee80211_validate_radiotap_
  		return false; /* only version 0 is supported */
  
  	/* does the skb contain enough to deliver on the alleged length? */
@@ -85,7 +81,7 @@ index a88076c..7d7950c 100644
  		return false; /* skb too short for claimed rt header extent */
  
  	return true;
-@@ -2382,13 +2382,13 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+@@ -2382,13 +2382,13 @@ netdev_tx_t ieee80211_monitor_start_xmit
  	skb_set_network_header(skb, len_rthdr);
  	skb_set_transport_header(skb, len_rthdr);
  
@@ -101,7 +97,7 @@ index a88076c..7d7950c 100644
  		goto fail;
  
  	/*
-@@ -2396,7 +2396,7 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+@@ -2396,7 +2396,7 @@ netdev_tx_t ieee80211_monitor_start_xmit
  	 * carrying a rfc1042 header
  	 */
  	if (ieee80211_is_data(hdr->frame_control) &&

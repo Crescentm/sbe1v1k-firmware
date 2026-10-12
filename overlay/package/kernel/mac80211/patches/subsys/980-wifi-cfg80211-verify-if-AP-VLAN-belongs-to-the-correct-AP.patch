@@ -21,11 +21,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  net/wireless/nl80211.c | 16 ++++++++++++----
  1 file changed, 12 insertions(+), 4 deletions(-)
 
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index 9fdcd5d..3f1ba1e 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -8815,10 +8815,12 @@ int cfg80211_check_station_change(struct wiphy *wiphy,
+@@ -8975,10 +8975,12 @@ int cfg80211_check_station_change(struct
  EXPORT_SYMBOL(cfg80211_check_station_change);
  
  /*
@@ -40,7 +38,7 @@ index 9fdcd5d..3f1ba1e 100644
  {
  	struct nlattr *vlanattr = info->attrs[NL80211_ATTR_STA_VLAN];
  	struct net_device *v;
-@@ -8848,6 +8850,12 @@ static struct net_device *get_vlan(struct genl_info *info,
+@@ -9008,6 +9010,12 @@ static struct net_device *get_vlan(struc
  		goto error;
  	}
  
@@ -53,7 +51,7 @@ index 9fdcd5d..3f1ba1e 100644
  	return v;
   error:
  	dev_put(v);
-@@ -9145,7 +9153,7 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
+@@ -9305,7 +9313,7 @@ static int nl80211_set_station(struct sk
  	if (err)
  		return err;
  
@@ -62,7 +60,7 @@ index 9fdcd5d..3f1ba1e 100644
  	if (IS_ERR(params.vlan))
  		return PTR_ERR(params.vlan);
  
-@@ -9446,7 +9454,7 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+@@ -9606,7 +9614,7 @@ static int nl80211_new_station(struct sk
  		}
  
  		/* must be last in here for error handling */

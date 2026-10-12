@@ -37,11 +37,9 @@ Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
  src/ap/ieee802_11_eht.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/src/ap/ieee802_11_eht.c b/src/ap/ieee802_11_eht.c
-index d8d06a714..6dd7e67d3 100644
 --- a/src/ap/ieee802_11_eht.c
 +++ b/src/ap/ieee802_11_eht.c
-@@ -2272,7 +2272,7 @@ hostapd_parse_link_reconf_req_sta_profile(struct hostapd_data *hapd,
+@@ -2250,7 +2250,7 @@ hostapd_parse_link_reconf_req_sta_profil
  	sta_info_len += nstr_bitmap_size;
  
  	sta_info = per_sta_prof->variable;

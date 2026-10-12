@@ -24,11 +24,9 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/mac80211/iface.c | 3 +++
  1 file changed, 3 insertions(+)
 
-diff --git a/net/mac80211/iface.c b/net/mac80211/iface.c
-index 43460a7..8c300e0 100644
 --- a/net/mac80211/iface.c
 +++ b/net/mac80211/iface.c
-@@ -935,6 +935,9 @@ static int ieee80211_netdev_setup_tc(struct net_device *dev,
+@@ -943,6 +943,9 @@ static int ieee80211_netdev_setup_tc(str
  	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
  	struct ieee80211_local *local = sdata->local;
  

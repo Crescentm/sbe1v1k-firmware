@@ -25,11 +25,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  net/wireless/nl80211.c | 3 +++
  1 file changed, 3 insertions(+)
 
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index 590c3ea..ac3b0ad 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -20904,6 +20904,9 @@ void cfg80211_rx_unprot_mlme_mgmt(struct net_device *dev, const u8 *buf,
+@@ -21065,6 +21065,9 @@ void cfg80211_rx_unprot_mlme_mgmt(struct
  	} else if (ieee80211_is_disassoc(mgmt->frame_control)) {
  		event.cmd = NL80211_CMD_UNPROT_DISASSOCIATE;
  	} else if (ieee80211_is_beacon(mgmt->frame_control)) {

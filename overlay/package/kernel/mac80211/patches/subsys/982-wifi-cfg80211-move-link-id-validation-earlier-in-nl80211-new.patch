@@ -18,11 +18,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  net/wireless/nl80211.c | 27 ++++++++++-----------------
  1 file changed, 10 insertions(+), 17 deletions(-)
 
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index efce3a1..f0463f6 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -9233,6 +9233,16 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+@@ -9393,6 +9393,16 @@ static int nl80211_new_station(struct sk
  	params.link_sta_params.link_id =
  		nl80211_link_id_or_invalid(info->attrs);
  
@@ -39,7 +37,7 @@ index efce3a1..f0463f6 100644
  	if (info->attrs[NL80211_ATTR_MLD_ADDR]) {
  		mac_addr = nla_data(info->attrs[NL80211_ATTR_MLD_ADDR]);
  		params.link_sta_params.mld_mac = mac_addr;
-@@ -9505,27 +9515,10 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
+@@ -9665,27 +9675,10 @@ static int nl80211_new_station(struct sk
  
  	/* be aware of params.vlan when changing code here */
  

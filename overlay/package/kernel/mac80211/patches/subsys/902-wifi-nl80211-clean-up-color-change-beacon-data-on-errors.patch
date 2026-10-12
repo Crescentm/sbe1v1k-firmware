@@ -27,11 +27,9 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/wireless/nl80211.c | 10 +++++-----
  1 file changed, 5 insertions(+), 5 deletions(-)
 
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index 9aa8337..590c3ea 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -18752,15 +18752,15 @@ static int nl80211_color_change(struct sk_buff *skb, struct genl_info *info)
+@@ -18912,15 +18912,15 @@ static int nl80211_color_change(struct s
  	if (!wdev->links[params.link_id].ap.beacon_interval)
  		return -EINVAL;
  

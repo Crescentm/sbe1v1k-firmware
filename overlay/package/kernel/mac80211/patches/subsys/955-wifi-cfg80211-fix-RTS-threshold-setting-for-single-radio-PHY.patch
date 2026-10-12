@@ -18,11 +18,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  net/wireless/nl80211.c | 11 ++++++-----
  1 file changed, 6 insertions(+), 5 deletions(-)
 
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index ac3b0ad..9fdcd5d 100644
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -4562,12 +4562,13 @@ static int nl80211_set_wiphy(struct sk_buff *skb, struct genl_info *info)
+@@ -4563,12 +4563,13 @@ static int nl80211_set_wiphy(struct sk_b
  			rdev->wiphy.retry_long = retry_long;
  		if (changed & WIPHY_PARAM_FRAG_THRESHOLD)
  			rdev->wiphy.frag_threshold = frag_threshold;
