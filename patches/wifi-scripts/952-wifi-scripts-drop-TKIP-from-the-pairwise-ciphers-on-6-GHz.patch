@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Subject: [PATCH] wifi-scripts: drop TKIP from the pairwise ciphers on 6 GHz
+
+ImmortalWrt now maps every encryption value to WPA3 or OWE on 6 GHz
+(encryption_band(), from OpenWrt 4fed8d3c79 "enforce WPA3 for all
+encryption types on 6 GHz", b7930c15b5, b5608ead44), so psk, psk2,
+psk-mixed, wpa, wpa2 and wpa-mixed come up as SAE or WPA3-EAP with
+wpa=2 and ieee80211w=2. The mapping keeps the cipher suffix, though:
+psk2+tkip, psk-mixed+tkip+ccmp or wpa2+tkip still give
+wpa_pairwise=TKIP or "CCMP TKIP", and hostapd refuses the BSS ("Invalid
+pairwise cipher suite for 6 GHz").
+
+Drop TKIP from wpa_pairwise on 6 GHz, falling back to CCMP if nothing
+is left.
+
+[Crescentm: what is left of the local 952 (OpenWrt PR #23914 plus wpa=2
+ and the TKIP filter) after #23914 was merged as 4fed8d3c79 and
+ ImmortalWrt's 6 GHz mapping took over the rest. Renamed from
+ 952-wifi-scripts-use-SAE-WPA3-EAP-for-WPA2-only-6GHz-APs.patch.]
+---
+ files-ucode/usr/share/ucode/wifi/ap.uc | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/files-ucode/usr/share/ucode/wifi/ap.uc b/files-ucode/usr/share/ucode/wifi/ap.uc
+index de474351f9..dd5ecdb1f7 100644
+--- a/files-ucode/usr/share/ucode/wifi/ap.uc
++++ b/files-ucode/usr/share/ucode/wifi/ap.uc
+@@ -717,6 +717,16 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
+ 		config.mlo ? (config.mlo_bands ?? []) : null);
+ 	iface.parse_encryption(config, data.config, phy_features, rsno2);
+ 
++	/*
++	 * TKIP is not allowed on 6 GHz: drop it from the pairwise ciphers of
++	 * the tkip and tkip+ccmp suffixes (e.g. psk2+tkip), which
++	 * encryption_band() keeps.
++	 */
++	if (data.config.band == '6g' && config.wpa_pairwise) {
++		let pairwise = filter(split(config.wpa_pairwise, ' '), c => c != 'TKIP');
++		config.wpa_pairwise = length(pairwise) ? join(' ', pairwise) : 'CCMP';
++	}
++
+ 	const refusal = mld ?
+ 		mld_refusal(link_config, data.config, phy_features, rsno2) : bss_refusal(config, data.config.band);
+ 	if (refusal)

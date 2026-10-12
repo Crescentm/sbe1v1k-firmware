@@ -10,6 +10,12 @@ every first boot (and every RAM boot) hits this.
 
 Reload netifd when "wifi config" changed the file.
 
+---
+ files/etc/hotplug.d/ieee80211/10-wifi-detect | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/files/etc/hotplug.d/ieee80211/10-wifi-detect b/files/etc/hotplug.d/ieee80211/10-wifi-detect
+index a9d5f701bb..0016d673b0 100644
 --- a/files/etc/hotplug.d/ieee80211/10-wifi-detect
 +++ b/files/etc/hotplug.d/ieee80211/10-wifi-detect
 @@ -1,6 +1,12 @@

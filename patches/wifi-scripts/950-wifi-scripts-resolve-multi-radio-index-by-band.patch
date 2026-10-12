@@ -19,10 +19,12 @@ first boot disables all 6 GHz channels).
 Link: https://github.com/openwrt/openwrt/pull/24639
 Link: https://github.com/openwrt/openwrt/issues/24370
 ---
-  files-ucode/lib/netifd/wireless/mac80211.sh | 30 ++++++++++-----
-  files-ucode/usr/share/ucode/wifi/common.uc  | 41 +++++++++++++++++++++
-  2 files changed, 61 insertions(+), 10 deletions(-)
+ files-ucode/lib/netifd/wireless/mac80211.sh | 28 +++++++++++++-------
+ files-ucode/usr/share/ucode/wifi/common.uc  | 41 +++++++++++++++++++++++++++++
+ 2 files changed, 60 insertions(+), 9 deletions(-)
 
+diff --git a/files-ucode/lib/netifd/wireless/mac80211.sh b/files-ucode/lib/netifd/wireless/mac80211.sh
+index 855037844e..12d7a8550b 100755
 --- a/files-ucode/lib/netifd/wireless/mac80211.sh
 +++ b/files-ucode/lib/netifd/wireless/mac80211.sh
 @@ -2,7 +2,7 @@
@@ -34,7 +36,7 @@ Link: https://github.com/openwrt/openwrt/issues/24370
  import { validate, dump_options } from 'wifi.validate';
  import * as supplicant from 'wifi.supplicant';
  import * as hostapd from 'wifi.hostapd';
-@@ -173,15 +173,6 @@ function setup() {
+@@ -173,14 +173,6 @@ function setup() {
  		netifd.set_retry(false);
  		return 1;
  	}
@@ -43,14 +45,13 @@ Link: https://github.com/openwrt/openwrt/issues/24370
 -	data.ifname_prefix = data.config.ifname_prefix;
 -	if (!data.ifname_prefix)
 -		data.ifname_prefix = data.phy + data.vif_phy_suffix + "-";
--	let active_ifnames = [];
 -
 -	log('Starting');
 -
  	let config = data.config;
  
  	if (!config.band) {
-@@ -205,6 +196,25 @@ function setup() {
+@@ -204,6 +196,24 @@ function setup() {
  	}
  	delete config.hwmode;
  
@@ -69,13 +70,14 @@ Link: https://github.com/openwrt/openwrt/issues/24370
 +	data.ifname_prefix = data.config.ifname_prefix;
 +	if (!data.ifname_prefix)
 +		data.ifname_prefix = data.phy + data.vif_phy_suffix + "-";
-+	let active_ifnames = [];
 +
 +	log('Starting');
 +
  	validate('device', config);
  	setup_phy(data.phy, data.config, data.data);
  
+diff --git a/files-ucode/usr/share/ucode/wifi/common.uc b/files-ucode/usr/share/ucode/wifi/common.uc
+index e477b1f455..ceca6bbed7 100644
 --- a/files-ucode/usr/share/ucode/wifi/common.uc
 +++ b/files-ucode/usr/share/ucode/wifi/common.uc
 @@ -28,6 +28,47 @@ export function wiphy_band(info, band) {

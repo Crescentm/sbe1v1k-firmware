@@ -44,15 +44,21 @@ comes up with a locally administered address and clients complete SAE.
 Signed-off-by: Kamil Bienkiewicz <perceivalpercy@gmail.com>
 Link: https://github.com/openwrt/openwrt/pull/24955
 [Crescentm: from OpenWrt PR #24955 head 6d18f7aff816ce0073e9146c005af9dba3cf30f0,
- without its Makefile PKG_RELEASE bump (0010/0011 already bump wifi-scripts)]
+ without its Makefile PKG_RELEASE bump. Rebased on ImmortalWrt da63f7d6ac:
+ wireless.uc now also imports wireless-macaddr.uc and iface.uc's
+ prepare() lost its MAC allocator arguments, so two hunks were redone by
+ hand; the code is unchanged. Still needed with the netifd MAC allocator
+ (090afc220f, eb8cbaeebd): mld_macaddr_get() in hostapd.uc passes the
+ configured macaddr as a static address, so 'random' still reaches
+ nl80211.]
 ---
- .../files-ucode/usr/share/ucode/wifi/iface.uc | 12 +----------
- .../wifi-scripts/files/lib/netifd/wireless.uc | 12 ++++++++++-
- .../files/usr/share/ucode/wifi/utils.uc       | 20 ++++++++++++++++++-
+ .../files-ucode/usr/share/ucode/wifi/iface.uc        | 12 +-----------
+ .../config/wifi-scripts/files/lib/netifd/wireless.uc | 12 +++++++++++-
+ .../wifi-scripts/files/usr/share/ucode/wifi/utils.uc | 20 +++++++++++++++++++-
  3 files changed, 31 insertions(+), 13 deletions(-)
 
 diff --git a/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc b/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc
-index 7087095c..01b50208 100644
+index 4cddc03d43..98e7046f60 100644
 --- a/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc
 +++ b/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/iface.uc
 @@ -1,6 +1,7 @@
@@ -62,8 +68,8 @@ index 7087095c..01b50208 100644
 +import { macaddr_random } from 'wifi.utils';
  import * as fs from 'fs';
  
- export function parse_encryption(config, dev_config, phy_features) {
-@@ -259,17 +260,6 @@ export function wpa_key_mgmt(config, band) {
+ const WLAN_CIPHER_SUITE_GCMP_256 = 0x000fac09;
+@@ -364,17 +365,6 @@ export function wpa_key_mgmt(config, band) {
  	config.key_mgmt = config.wpa_key_mgmt;
  };
  
@@ -78,11 +84,11 @@ index 7087095c..01b50208 100644
 -	return join(":", map(addr, (v) => sprintf("%02x", v)));
 -}
 -
- let mac_idx = 0;
- export function prepare(data, phy, num_global_macaddr, macaddr_base) {
+ export function prepare(data) {
  	if (!data.macaddr) {
+ 		data.default_macaddr = true;
 diff --git a/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc b/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc
-index 17327213..41878b7c 100644
+index 3557958103..9d382126dd 100644
 --- a/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc
 +++ b/package/network/config/wifi-scripts/files/lib/netifd/wireless.uc
 @@ -7,7 +7,7 @@ import {
@@ -92,9 +98,9 @@ index 17327213..41878b7c 100644
 -import { find_phy } from "wifi.utils";
 +import { find_phy, macaddr_random } from "wifi.utils";
  import * as wdev from "./wireless-device.uc";
+ import * as macaddr from "./wireless-macaddr.uc";
  
- let wireless = netifd.wireless = {
-@@ -56,6 +56,16 @@ function mlo_vif_create(config, radio_config, vif_idx, mlo_vifs)
+@@ -64,6 +64,16 @@ function mlo_vif_create(config, radio_config, vif_idx, mlo_vifs)
  {
  	let mlo_config = { ...config };
  
@@ -112,7 +118,7 @@ index 17327213..41878b7c 100644
  		mlo_config['4addr'] = config.wds;
  	mlo_config.radio_config = radio_config;
 diff --git a/package/network/config/wifi-scripts/files/usr/share/ucode/wifi/utils.uc b/package/network/config/wifi-scripts/files/usr/share/ucode/wifi/utils.uc
-index d5867e11..f7870a6e 100644
+index d5867e11f4..f7870a6e9c 100644
 --- a/package/network/config/wifi-scripts/files/usr/share/ucode/wifi/utils.uc
 +++ b/package/network/config/wifi-scripts/files/usr/share/ucode/wifi/utils.uc
 @@ -1,6 +1,6 @@

@@ -14,7 +14,7 @@ Link: https://github.com/openwrt/openwrt/pull/25479
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/files-ucode/lib/netifd/wireless/mac80211.sh b/files-ucode/lib/netifd/wireless/mac80211.sh
-index ae62602e..7eb22845 100755
+index f21e312e01..80ba098873 100755
 --- a/files-ucode/lib/netifd/wireless/mac80211.sh
 +++ b/files-ucode/lib/netifd/wireless/mac80211.sh
 @@ -102,7 +102,7 @@ function setup_phy(phy, config, data) {

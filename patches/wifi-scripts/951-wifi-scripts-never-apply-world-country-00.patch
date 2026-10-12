@@ -19,10 +19,12 @@ Same idea as the SBE1V1K_immortalwrt_NSS fix (commit 32136c496d,
 https://cnb.cool/minihuber/SBE1V1K_immortalwrt_NSS), written as a
 minimal change.
 ---
-  files-ucode/lib/netifd/wireless/mac80211.sh |  9 +++++-
-  files-ucode/usr/share/ucode/wifi/hostapd.uc | 36 +++++++++++++++++----
-  2 files changed, 37 insertions(+), 8 deletions(-)
+ files-ucode/lib/netifd/wireless/mac80211.sh |  9 +++++++-
+ files-ucode/usr/share/ucode/wifi/hostapd.uc | 36 +++++++++++++++++++++++------
+ 2 files changed, 37 insertions(+), 8 deletions(-)
 
+diff --git a/files-ucode/lib/netifd/wireless/mac80211.sh b/files-ucode/lib/netifd/wireless/mac80211.sh
+index 12d7a8550b..f21e312e01 100755
 --- a/files-ucode/lib/netifd/wireless/mac80211.sh
 +++ b/files-ucode/lib/netifd/wireless/mac80211.sh
 @@ -70,7 +70,14 @@ function setup_phy(phy, config, data) {
@@ -41,6 +43,8 @@ minimal change.
  		log(`Setting country code to ${config.country_code}`);
  		system(`iw reg set ${config.country_code}`);
  	}
+diff --git a/files-ucode/usr/share/ucode/wifi/hostapd.uc b/files-ucode/usr/share/ucode/wifi/hostapd.uc
+index 10f5a99922..aea0074130 100644
 --- a/files-ucode/usr/share/ucode/wifi/hostapd.uc
 +++ b/files-ucode/usr/share/ucode/wifi/hostapd.uc
 @@ -2,7 +2,7 @@
@@ -52,7 +56,7 @@ minimal change.
  } from 'wifi.common';
  import { validate } from 'wifi.validate';
  import * as netifd from 'wifi.netifd';
-@@ -68,16 +68,38 @@ function device_log_append(config) {
+@@ -66,16 +66,38 @@ function device_log_append(config) {
  }
  
  /* setup country code */
