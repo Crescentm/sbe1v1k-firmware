@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Crescentm <guyues@outlook.com>
+Date: Mon, 12 Oct 2026 23:00:00 +0800
+Subject: [PATCH] hostapd, wifi-scripts: bump PKG_RELEASE
+
+The tree patches 0016-0017, the hostapd patches in the overlay
+(overlay/package/network/services/hostapd/patches) and the wifi-scripts
+patches (patches/wifi-scripts) change what these packages build, so the
+packages from this feed must not carry the same version as ImmortalWrt's
+own build. hostapd.uc imports common.uc of wifi-scripts, so both come
+from this feed.
+
+ImmortalWrt da63f7d6ac has hostapd at 4 and wifi-scripts at 3.
+
+Signed-off-by: Crescentm <guyues@outlook.com>
+---
+ package/network/config/wifi-scripts/Makefile | 2 +-
+ package/network/services/hostapd/Makefile    | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/config/wifi-scripts/Makefile b/package/network/config/wifi-scripts/Makefile
+index 7499d0eb46..5637a82ef8 100644
+--- a/package/network/config/wifi-scripts/Makefile
++++ b/package/network/config/wifi-scripts/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=wifi-scripts
+ PKG_VERSION:=1.0
+-PKG_RELEASE:=3
++PKG_RELEASE:=4
+ PKG_LICENSE:=GPL-2.0
+ 
+ PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+diff --git a/package/network/services/hostapd/Makefile b/package/network/services/hostapd/Makefile
+index cf498e801f..eb8b37830d 100644
+--- a/package/network/services/hostapd/Makefile
++++ b/package/network/services/hostapd/Makefile
+@@ -5,7 +5,7 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=hostapd
+-PKG_RELEASE:=4
++PKG_RELEASE:=5
+ 
+ PKG_SOURCE_URL:=https://w1.fi/hostap.git
+ PKG_SOURCE_PROTO:=git
