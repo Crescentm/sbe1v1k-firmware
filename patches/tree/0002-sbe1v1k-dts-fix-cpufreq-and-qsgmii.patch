@@ -1,37 +1,19 @@
-sbe1v1k: dts: fix cpufreq and the QSGMII TX level
+sbe1v1k: dts: fix the s1 regulator and the QSGMII TX level
 
-- Drop l5: the stock tree has no l5, and requesting it from RPM fails
-  with -ENXIO, which leaves s1 unregistered and cpufreq-dt deferred.
 - s1: keep the 725 mV minimum (the stock tree says 587.5 mV, but with
   apply_uV the regulator core brings s1 up at its minimum before
   cpufreq takes over); stock 1075 mV maximum; always-on/boot-on.
 - Do not describe s2: nothing in Linux uses it.
-- Disable the unused QCE crypto nodes so the interconnect provider
-  reaches sync_state().
 - QCA8075: 300 mV QSGMII TX amplitude as programmed by the stock SSDK.
+
+Dropping l5 (cpufreq stuck at the boot clock) is upstream since
+0c517f6d77, and the QCE crypto nodes are disabled in ipq9574.dtsi
+since 704bb1dbbf.
 
 diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
 --- a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
 +++ b/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts
-@@ -171,26 +171,46 @@
- 	status = "okay";
- };
- 
-+/*
-+ * No driver binds the QCE crypto engine (CRYPTO_DEV_QCE is disabled). An
-+ * enabled but unbound consumer keeps the GCC interconnect provider from
-+ * reaching sync_state(), which also stalls cpufreq. Upstream only did this
-+ * for kiwi-dvk.
-+ */
-+&crypto {
-+	status = "disabled";
-+};
-+
-+&cryptobam {
-+	status = "disabled";
-+};
-+
- &rpm_requests {
+@@ -203,17 +203,25 @@
  	regulators {
  		compatible = "qcom,rpm-mp5496-regulators";
  
@@ -44,11 +26,6 @@ diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qual
 -		* the regulators are brought up with 725mV which is sufficient for all the
 -		* corner parts to operate at 800MHz
 -		*/
-+		 * The stock SBE1V1K device tree (SCP_1.0.5 HLOS and QSDK 12.5)
-+		 * has no l5: requesting it from RPM fails with -ENXIO, which also
-+		 * leaves s1 unregistered and keeps cpufreq-dt in deferred probe
-+		 * (CPU stuck at the boot clock).
-+		 *
 +		 * During kernel bootup, the SoC runs at 800MHz with 875mV set by
 +		 * the bootloaders. During regulator registration, kernel not
 +		 * knowing the initial voltage, considers it as zero and brings up
@@ -65,15 +42,12 @@ diff --git a/target/linux/qualcommbe/dts/ipq9570-sbe1v1k.dts b/target/linux/qual
 +		ipq9574_s1: s1 {
  			regulator-min-microvolt = <725000>;
  			regulator-max-microvolt = <1075000>;
--		};
--
--		mp5496_l5: l5 {
--			regulator-min-microvolt = <1800000>;
--			regulator-max-microvolt = <1800000>;
- 			regulator-always-on;
- 			regulator-boot-on;
++			regulator-always-on;
++			regulator-boot-on;
  		};
-@@ -497,6 +517,11 @@
+ 	};
+ };
+@@ -550,6 +558,11 @@
  		reg = <16>;
  
  		qcom,package-mode = "qsgmii";
