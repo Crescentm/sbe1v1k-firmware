@@ -214,7 +214,10 @@ order. 0363 lands right after 0362.
 
   The lan1 LEDs already exist in the DTS: QCA8081 led@0 yellow, led@2
   green, active-low.
-- **QCA8075 (lan2/lan3) LEDs: not added.** The mainline qca807x driver can
+- **QCA8075 (lan2/lan3) LEDs:** added later by R8 (`tree/0031`), from the
+  stock DT's `led_source` entries. The note below records why they were
+  left out at first.
+- **QCA8075 (lan2/lan3) LEDs (original note, superseded by R8): not added.** The mainline qca807x driver can
   do it (2 LEDs per PHY, MMD7 0x8074+, hw control up to 1000M; it has no
   polarity op). However, none of the SBE1V1K
   sources show how the lan2/lan3 LEDs are wired: hurrian, OneNAS,
@@ -227,7 +230,12 @@ order. 0363 lands right after 0362.
   SBE1V1K the RTL826x register map comes only from hurrian's work. It
   could not be checked against a datasheet; the Realtek SDK copies (TIP
   wlan-ap rtk) have no LED code. hurrian ships it on this board.
-- **Upstream:** not in OpenWrt or ImmortalWrt.
+  OpenWrt `6369c9e5c799` (the RTL8261BE/RTL8261N support behind
+  `pending-6.18/742`) has no LED code either, so it cannot confirm the
+  map. Check on hardware which LED lights at 10G, 2.5G and 1G.
+- **Upstream:** not in OpenWrt or ImmortalWrt. The same code by the same
+  author is open as [OpenWrt PR #24034](https://github.com/openwrt/openwrt/pull/24034)
+  (no review since 2026-07-03); that is not an independent source.
 
 ## T2a: 0005 lan1 phy-mode `usxgmii` → `sgmii` (test item)
 

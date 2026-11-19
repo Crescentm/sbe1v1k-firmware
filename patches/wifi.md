@@ -133,8 +133,13 @@ pcie3 @ 0x18000000 is 5 GHz (`_2`). Checks:
   smem up to 0x4ab00000) or with tzapp 0x49b00000–0x4a100000. The fixed
   regions span 0x50f00000–0x5a500000.
 - The chainloader U-Boot loads the FIT at 0x60000000, above them.
-- The NSS tree used an MLO size of 0x1100000 (17 MiB). The stock QSDK 12.5 DTB
-  value is 0x1200000, and that is what 0006 uses.
+- MLO size: 0006 uses 0x1200000 (18 MiB). The NSS tree used 0x1100000
+  (17 MiB), and so does the stock device tree attached to OpenWrt PR #21586
+  ([sbe1v1k.txt](https://github.com/user-attachments/files/24692753/sbe1v1k.txt),
+  `mlo_global_mem_0`). The earlier note here called 0x1200000 the stock
+  QSDK 12.5 value; no source for that was found, so treat 0x1100000 as the
+  stock value. The larger region is safe: the compiled DTB reserves
+  nothing else in 0x50f00000–0x5a500000. It only costs 1 MiB more.
 - This costs 168 MiB of the board's 2 GiB of RAM permanently. Today's dynamic path uses about 30 MiB
   per card.
 - Risk: the NSS project booted with these regions (d39d06d7ce reached
