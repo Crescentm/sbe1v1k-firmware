@@ -5,7 +5,7 @@
 | Directory | Applied how | Contents |
 |---|---|---|
 | `../overlay/` | copied into the tree as is | new files: qualcommbe kernel patches, mac80211/cfg80211 fixes (`package/kernel/mac80211/patches/subsys/`), hostapd fixes (`package/network/services/hostapd/patches/`), port LED defaults, and a host fakeroot fix for user namespaces |
-| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, DTS fixes, a NULL ubus context in hostapd VLAN teardown, `macaddr random` on MLO, hostapd/wifi-scripts `PKG_RELEASE` |
+| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, the 7 MiB kernel limit of the mainline layout, DTS fixes, a NULL ubus context in hostapd VLAN teardown, `macaddr random` on MLO, hostapd/wifi-scripts `PKG_RELEASE` |
 | `mac80211/` | copied to `package/kernel/mac80211/patches/ath12k/` | ath12k fixes; 970–989 are the test tier |
 | `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, no TKIP on 6 GHz, loading the wireless config written at first boot |
 

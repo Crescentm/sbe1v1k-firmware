@@ -352,6 +352,7 @@ others.
 | R5 fan PWM 1 kHz | dropped | was `tree/0032-sbe1v1k-dts-fan-pwm-1khz.patch` |
 | R6 rtpengine kmod on 6.18 | fix | `overlay/feeds/telephony/net/rtpengine/patches/105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch` **Dropped 2026-11-19:** the telephony feed carries the same fix as `105-kernel-module-use-ccflags-instead-of-EXTRA_CFLAGS.patch` since `8695daf`; ours sorted after it and would no longer apply |
 | R8 lan2/lan3 LEDs | test | `tree/0031-sbe1v1k-dts-lan2-lan3-phy-leds.patch`, `overlay/.../ipq95xx/base-files/etc/board.d/01_leds` |
+| R9 kernel size limit (7 MiB, mainline layout) | fix | `tree/0007-sbe1v1k-image-limit-the-kernel-to-7-MiB.patch` |
 
 All the new kernel patches sit in the qualcommbe target directory, even
 the generic ones (phylink, thermal, PCI core). Some of them were adapted
@@ -683,6 +684,26 @@ board keeps its 25 kHz period. The notes below are kept for reference.
 - **If the colours are swapped on the hardware:** exchange
   `LED_COLOR_ID_YELLOW` and `LED_COLOR_ID_GREEN` in both nodes of 0031.
   01_leds then needs no change.
+
+## R9: kernel size limit (tree/0007, fix)
+
+- **Problem:** the mainline layout of OpenWrt PR #21586 boots with
+  `do_boot=mmc read 0x44000000 0x00014022 0x3800; bootm 0x44000000`, so
+  U-Boot loads 0x3800 blocks (7 MiB, 7340032 bytes) from `0:HLOS`, which
+  is 7 MiB itself. `Device/askey_sbe1v1k` had no `KERNEL_SIZE`, and
+  `emmc_do_upgrade` writes the kernel without checking its size. An
+  oversized FIT image would be written short and the board would not boot.
+  The `large` layout's 32 MiB kernel partition hides this.
+- **Fix:** `KERNEL_SIZE := 7168k`. `Build/check-size` then removes an
+  oversized kernel image at build time (with a WARNING), so no sysupgrade
+  image is made from it.
+- **Headroom:** the r42138 kernel is 6228904 bytes, about 1.06 MiB below
+  the limit. Large additions such as the PPE offload series need a size
+  check.
+- **Cost:** the same image goes to every layout, so `large` boards get the
+  7 MiB limit too. A kernel that does not fit the mainline layout should
+  not be shipped anyway.
+- **Upstream:** not in OpenWrt or ImmortalWrt.
 
 ## Round 2 validation
 

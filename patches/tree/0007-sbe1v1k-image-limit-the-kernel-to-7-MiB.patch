@@ -1,0 +1,25 @@
+sbe1v1k: image: limit the kernel to 7 MiB
+
+The mainline layout of OpenWrt PR #21586 boots with
+`do_boot=mmc read 0x44000000 0x00014022 0x3800; bootm 0x44000000`:
+U-Boot loads 0x3800 blocks (7 MiB) from 0:HLOS, which is itself 7 MiB.
+Nothing checked the kernel against that. emmc_do_upgrade writes the
+kernel without a size check, so a FIT image over 7 MiB would be cut
+short and the board would not boot. The "large" layout's 32 MiB kernel
+partition hides this.
+
+Set KERNEL_SIZE so that Build/check-size drops an oversized kernel
+image at build time and no sysupgrade image is made from it. The
+r42138 kernel is 6228904 bytes, about 1.06 MiB below the limit.
+
+diff --git a/target/linux/qualcommbe/image/ipq95xx.mk b/target/linux/qualcommbe/image/ipq95xx.mk
+--- a/target/linux/qualcommbe/image/ipq95xx.mk
++++ b/target/linux/qualcommbe/image/ipq95xx.mk
+@@ -25,6 +25,7 @@ define Device/askey_sbe1v1k
+ 	DEVICE_ALT1_MODEL := SBE1V1K
+ 	DEVICE_DTS_CONFIG := config@rtq7300t-rev0
+ 	KERNEL_LOADADDR := 0x42200000
++	KERNEL_SIZE := 7168k
+ 	SOC := ipq9570
+ 	DEVICE_PACKAGES := ath12k-firmware-qcn9274 f2fsck ipq-wifi-askey_sbe1v1k kmod-ath12k \
+ 		kmod-hwmon-pwmfan kmod-leds-pwm kmod-phy-realtek mkf2fs rtl826x-firmware
