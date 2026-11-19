@@ -4,15 +4,17 @@
 
 | Directory | Applied how | Contents |
 |---|---|---|
-| `../overlay/` | copied into the tree as is | new files: qualcommbe kernel patches, mac80211/cfg80211 fixes (`package/kernel/mac80211/patches/subsys/`), hostapd fixes (`package/network/services/hostapd/patches/`), a feed package fix, and a host fakeroot fix for user namespaces |
-| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, DTS fixes, hostapd ubus/rfkill leak fixes, `macaddr random` on MLO, hostapd/wifi-scripts `PKG_RELEASE` |
+| `../overlay/` | copied into the tree as is | new files: qualcommbe kernel patches, mac80211/cfg80211 fixes (`package/kernel/mac80211/patches/subsys/`), hostapd fixes (`package/network/services/hostapd/patches/`), port LED defaults, and a host fakeroot fix for user namespaces |
+| `tree/` | `git apply` at the tree root | changes to existing files: sysupgrade on the "large" GPT, DTS fixes, a NULL ubus context in hostapd VLAN teardown, `macaddr random` on MLO, hostapd/wifi-scripts `PKG_RELEASE` |
 | `mac80211/` | copied to `package/kernel/mac80211/patches/ath12k/` | ath12k fixes; 970–989 are the test tier |
-| `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, no TKIP on 6 GHz, 0 dBm TX power, loading the wireless config written at first boot |
+| `wifi-scripts/` | `patch -p1` in `package/network/config/wifi-scripts` | radio-by-band mapping, no world `country=00`, no TKIP on 6 GHz, loading the wireless config written at first boot |
 
-Base: ImmortalWrt master `da63f7d6ac` (2026-10-12, kernel 6.18.55,
-mac80211 = backports 7.2 `PKG_RELEASE:=5`, hostapd `831364bf02`
-`PKG_RELEASE:=4`). See [Rebase onto da63f7d6ac](#rebase-onto-immortalwrt-da63f7d6ac-2026-10-12)
-for what changed against the old base `bf156b68e3`.
+Base: ImmortalWrt master `c4c69cfede` (2026-11-18, kernel 6.18.60,
+mac80211 = backports 7.2 `PKG_RELEASE:=15`, hostapd `831364bf02`
+`PKG_RELEASE:=7`). See [Rebase onto c4c69cfede](#rebase-onto-immortalwrt-c4c69cfede-2026-11-19)
+for what changed against the previous base `da63f7d6ac`, and
+[Rebase onto da63f7d6ac](#rebase-onto-immortalwrt-da63f7d6ac-2026-10-12)
+for the one before (`bf156b68e3`).
 
 Details for the patches added on 2026-10-01 (rounds 1 and 2):
 
@@ -30,6 +32,63 @@ status. They were first validated against the ImmortalWrt SDK, then built and
 tested on hardware from ImmortalWrt master `bf156b68e3`.
 
 ---
+
+## Rebase onto ImmortalWrt `c4c69cfede` (2026-11-19)
+
+Every scheduled CI run since 2026-10-18 failed at "applying tree patches":
+`tree/0002` no longer applied after ImmortalWrt `0c517f6d77` dropped the
+MP5496 L5 node from the SBE1V1K DTS. The 1370 commits after `da63f7d6ac`
+also moved the kernel to 6.18.60, added 134 hostapd patches (ImmortalWrt
+now numbers its own hostapd patches up to 926, so they interleave with
+ours by name) and merged several of our backports. Every patch was
+checked against `c4c69cfede`:
+
+| Patch | Verdict | Upstream |
+|---|---|---|
+| `tree/0002` DTS cpufreq/QSGMII | reduced | l5 dropped by `0c517f6d77`; `crypto`/`cryptobam` disabled in `ipq9574.dtsi` by `704bb1dbbf` (`0410-arm64-dts-qcom-ipq9574-disable-crypto-by-default`). Kept: the s1 comment and always-on/boot-on, the 300 mV QSGMII TX amplitude. File name kept |
+| `tree/0016` hostapd ubus/rfkill | reduced, renamed `0016-hostapd-do-not-notify-vlans-after-the-ubus-context-is-torn-down` | rfkill stub leak: `785608b9ee` (the stub frees the config instead of returning NULL, also leak-free); taxonomy free: `59787f0ff4`; the 601/605/803 refresh goes with it. Kept: the NULL `ctx` guard in `hostapd_ubus_vlan_action()`, still needed (`hostapd_ubus_free_bss()` still runs before `vlan_deinit()`, `has_subscribers` is still never cleared) |
+| `tree/0019` `PKG_RELEASE` | redone | ImmortalWrt has hostapd 7 and wifi-scripts 5; bumped to 8 and 6 |
+| `wifi-scripts/953` 0 dBm | dropped | `5ee6f1fdbe`, same change |
+| `wifi-scripts/952` TKIP on 6 GHz | refreshed | line numbers; `+tkip` suffixes still put TKIP into `wpa_pairwise`, so the filter stays |
+| `overlay/feeds/telephony/…/rtpengine/patches/105` | dropped | the telephony feed has the same fix as `105-kernel-module-use-ccflags-instead-of-EXTRA_CFLAGS.patch` since `8695daf` (2026-10-27); ours sorted after it and would fail as already applied |
+| `overlay/…/hostapd/patches/904` assoc response buffer | dropped | `186-ap-mld-announce-the-removal-of-an-affiliated-ap` adds `hostapd_eid_eht_ml_assoc_len()`, which counts the same Basic ML element plus the Reconfiguration ML element |
+| `overlay/…/hostapd/patches/916` active_links | refreshed with fuzz, checked by hand | the `driver_nl80211.h` context gained `nl80211_get_link_id_by_freq()`; content unchanged, and nothing else handles `NL80211_CMD_START_AP` |
+| `overlay/…/hostapd/patches/` 901, 902, 905, 906, 909, 910, 913, 917, 931 | refreshed | line numbers only |
+| `overlay/…/mac80211/patches/subsys/` 946, 947, 950, 951, 955, 957 | dropped | ImmortalWrt subsys 486, 485, 487, 489, 490, 488 |
+| `overlay/…/mac80211/patches/subsys/963` | dropped | folded into subsys `361` by `e4d0856463` |
+| `overlay/…/mac80211/patches/subsys/` 33 others | refreshed | line numbers only |
+| `mac80211/906`, `mac80211/920` (ath12k) | dropped | ImmortalWrt ath12k 110 and 105 |
+| `mac80211/` 900, 901, 903, 904, 905, 908, 922, 932, 953 | refreshed | line numbers only |
+| `overlay/…/qualcommbe/patches-6.18/0420` IMEM | refreshed | line numbers only (6.18.60) |
+| everything else | unchanged | applies without fuzz or offset |
+
+Related upstream changes that need nothing from us: the status LED is now
+`pwm-leds` on PWM 0–2 and the fan reports its tachometer (`9e881bc5be`,
+adds `kmod-leds-pwm`); UART3 for the EFR32MG21 is enabled (`a939b3fbfd`).
+None of our DTS patches use those pins, and `01_leds` only sets the port
+LEDs. `f48fd61568` makes the ath12k hotplug trigger match
+`ath12k_wifi7_pci` as well.
+
+Checks, all on `c4c69cfede` without a full `make` (CI does the build):
+
+- `src-build.sh` with `STAGE=prepare` (feeds installed) succeeds: overlay,
+  all tree patches with `git apply --check`, wifi-scripts with
+  `patch -F0`, `make defconfig`, every package of `packages.txt` and the
+  device selected.
+- quilt 0.69 (`--fuzz=0`, OpenWrt's `-p ab --no-timestamps --no-index`
+  refresh arguments, `QUILT_DIFF_OPTS=-p`) pushes the full series in
+  OpenWrt's order onto the unpacked sources: kernel 6.18.60 (generic
+  backport/pending/hack plus qualcommbe, 681 patches), backports 7.2
+  (444), hostapd `831364bf02` with `src/` copied in (245). No rejects,
+  no fuzz, no offsets. The refreshed patches above came out of that run;
+  the same script on `da63f7d6ac` refreshes nothing.
+- fakeroot 2.1.3 (ImmortalWrt added `400-stat64-fix`) takes our 900
+  without offset; iwinfo is unchanged.
+- The patched `ipq9570-sbe1v1k.dts` builds with cpp + dtc against the
+  patched 6.18.60 tree; its only warnings are the SoC dtsi's
+  `unique_unit_address` ones that the kernel build disables.
+- Not checked: `ucode -c` on the wifi-scripts files (no ucode on the
+  build host); only 952 moved, and only by line numbers.
 
 ## Rebase onto ImmortalWrt `da63f7d6ac` (2026-10-12)
 

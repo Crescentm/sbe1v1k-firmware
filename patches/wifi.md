@@ -60,7 +60,7 @@ Order: 900–911 upstream backports, 920–923 pending fixes, 950–960 local, 9
 | `903-wifi-ath12k-avoid-buffer-overread-in-ath12k_wmi_op_rx` | mainline [7698656a2f7b](https://github.com/torvalds/linux/commit/7698656a2f7b) | Jeff Johnson | Reads past a short WMI event (W8 hardening) | clean |
 | `904-wifi-ath12k-fix-overreads-in-csa_switch_count_event` | mainline [878654eb78c6](https://github.com/torvalds/linux/commit/878654eb78c6) | Jeff Johnson | Reads past a CSA switch count event (W8 hardening) | clean |
 | `905-wifi-ath12k-validate-TLV-length-in-process_tpc_stats` | mainline [8e415b806848](https://github.com/torvalds/linux/commit/8e415b806848) | Jeff Johnson | Unchecked TLV length in TPC stats (W8 hardening) | clean |
-| `906-wifi-ath12k-fix-stride-mismatch-in-mac_phy_caps_parse` | mainline [4c6eb712a91f](https://github.com/torvalds/linux/commit/4c6eb712a91f) | Jeff Johnson | Heap overflow when firmware sends short MAC/PHY capability TLVs (W4) | clean |
+| `906-wifi-ath12k-fix-stride-mismatch-in-mac_phy_caps_parse` | mainline [4c6eb712a91f](https://github.com/torvalds/linux/commit/4c6eb712a91f) | Jeff Johnson | Heap overflow when firmware sends short MAC/PHY capability TLVs (W4) | clean **Dropped 2026-11-19:** ImmortalWrt ath12k `110` carries it |
 | `907-wifi-ath12k-fix-encrypted-EAPOL-TX-in-encap-offload-mode` | mainline [1e33f8acd837](https://github.com/torvalds/linux/commit/1e33f8acd837) | Reshma Immaculate Rajkumar | EAPOL frames sent encrypted during rekey in Ethernet encap offload mode, so clients drop them (W5) | clean |
 | `908-wifi-ath12k-signal-regd-update-completion-when-reg-event-is-dropped` | ath.git [f2576dc0f894](https://git.kernel.org/pub/scm/linux/kernel/git/ath/ath.git/commit/?id=f2576dc0f894ef33045ba7ed057ec417988bba8a) | Baochen Qiang | "Timeout while waiting for regulatory update" at bring-up when the country is unchanged (W3) | clean |
 | `909-wifi-ath12k-use-per-radio-ab-in-ath12k_mac_hw_register` | ath.git [af8d103b2b23](https://git.kernel.org/pub/scm/linux/kernel/git/ath/ath.git/commit/?id=af8d103b2b23f8cf9a1a72b15b3873bad53470df) | Baochen Qiang | In a multi-device wiphy, the country code and `current_cc_support` were taken from the first device for all radios (W3) | clean |
@@ -71,7 +71,7 @@ Order: 900–911 upstream backports, 920–923 pending fixes, 950–960 local, 9
 
 | File | Source | Author | Fixes | Notes |
 |---|---|---|---|---|
-| `920-wifi-ath12k-assign-device-id-from-the-WSI-index` | [patchwork v3](https://patchwork.kernel.org/project/linux-wireless/patch/20260928213322.98949-1-yahoo@perenite.com/), also the head of [OpenWrt PR #25424](https://github.com/openwrt/openwrt/pull/25424) | Benoit Masson | The radio order inside the wiphy (and the wiphy's parent device) changes between boots ([#24370](https://github.com/openwrt/openwrt/issues/24370)) (W1) | **Replaces our 954.** Same behaviour as 954 (`device_id = wsi->index`). 954 also had bounds and duplicate checks, which v3 does not need: `ath12k_core_get_wsi_index()` only returns indices that come from walking the ring, so they are unique and below `num_devices`. With either patch, index 0 is the WSI controller (pcie2, 6 GHz) and the wiphy hangs off that device, so the current firmware already behaves this way |
+| `920-wifi-ath12k-assign-device-id-from-the-WSI-index` | [patchwork v3](https://patchwork.kernel.org/project/linux-wireless/patch/20260928213322.98949-1-yahoo@perenite.com/), also the head of [OpenWrt PR #25424](https://github.com/openwrt/openwrt/pull/25424) | Benoit Masson | The radio order inside the wiphy (and the wiphy's parent device) changes between boots ([#24370](https://github.com/openwrt/openwrt/issues/24370)) (W1) | **Replaces our 954.** Same behaviour as 954 (`device_id = wsi->index`). 954 also had bounds and duplicate checks, which v3 does not need: `ath12k_core_get_wsi_index()` only returns indices that come from walking the ring, so they are unique and below `num_devices`. With either patch, index 0 is the WSI controller (pcie2, 6 GHz) and the wiphy hangs off that device, so the current firmware already behaves this way **Dropped 2026-11-19:** ImmortalWrt ath12k `105` carries it |
 | `921-wifi-ath12k-fix-freq-range-overflow-when-reg-rules-not-yet-parsed` | [patchwork](https://patchwork.kernel.org/project/linux-wireless/patch/apl2QtZu6EwGL0dD@mpf-ESPRIMO-P9012/) | Michael Pfeifroth | `freq_low` stays at INT_MAX before the 5/6 GHz rules arrive and overflows into an empty range; AP start then fails with "Failed to set beacon parameters" (W2) | clean. Tested-on QCN9274 |
 | `922-wifi-ath12k-validate-MAC-PHY-capability-count-before-saving` | [patchwork](https://patchwork.kernel.org/project/linux-wireless/patch/20260925121739.2061979-1-yaojiale02@163.com/) | Jiale Yao | Writes past `mac_phy_info[]` when firmware advertises too many PHYs (W4) | **Watch:** the second check rejects the whole service-ready event if the number of MAC/PHY TLVs differs from the PHY count in the HW mode bitmaps. A device whose firmware does this then fails to come up, and a WSI group with it goes down too. With 906 alone, the missing entries would just be zero. If a radio fails with `invalid number of MAC/PHY caps`, delete 922 |
 | `923-wifi-ath12k-skip-uncreated-links-on-scan-failure` | [Quarx2k/OpenWRT-BE7000 962](https://github.com/Quarx2k/OpenWRT-BE7000/blob/912ec81c992f1c8029bf128164021c2d3aec117d/package/kernel/mac80211/patches/ath12k/962-ath12k-skip-uncreated-links-on-scan-failure.patch) (branch be7000-snapshot) | Nickolai Semendiaev | NULL `arvif->ar` dereference in the scan-failure cleanup for links without a vdev (W7) | renumbered 962 → 923. Not submitted upstream |
@@ -308,24 +308,24 @@ section) and 980–983.
 | `943` fix monitor min_def bandwidth | mainline 43473cc1b0dc | Johannes Berg | monitor added to a running chanctx narrows its min width | clean |
 | `944` don't apply peer rates to off-channel frames | mainline f5dd0626d2b0 (v7.3-rc4) | Johannes Berg | WARN in rate control for scan/off-channel frames to a known station | clean |
 | `945` don't drop scan probe requests for lack of peer rates | mainline 23c68b4aaf5e (v7.3-rc4) | Johannes Berg | follow-up to 944 | clean |
-| `946` count only matching reservations in reserved switch | wireless.git 437f3727b4fd | Zhiling Zou | multi-vif/multi-link channel switch (CSA) validation | clean |
-| `947` keep paired old chanctx alive | wireless.git 3412e9a80078 | Zhiling Zou | use-after-free in chanctx replacement (CSA with several vifs) | clean |
+| `946` count only matching reservations in reserved switch | wireless.git 437f3727b4fd | Zhiling Zou | multi-vif/multi-link channel switch (CSA) validation | clean **Dropped 2026-11-19:** ImmortalWrt subsys `486` |
+| `947` keep paired old chanctx alive | wireless.git 3412e9a80078 | Zhiling Zou | use-after-free in chanctx replacement (CSA with several vifs) | clean **Dropped 2026-11-19:** ImmortalWrt subsys `485` |
 | `948` release mesh path quota on failed additions | wireless.git 7325a44474f2 | Zhao Li | **mesh**: path counter leak until no new paths can be added | clean |
 | `949` account proxy paths against the mesh path limit | wireless.git a5f35d4b112a | Zhao Li | **mesh**: proxy path churn drives the path counter negative | clean |
-| `950` drain PS delivery work during station teardown | wireless.git 67a9e80c3ca2 | Zhao Li | AP/mesh: driver notified about a removed station (power save) | clean |
-| `951` drop oversized fragments to avoid extra_len overflow | wireless.git 5e4f3509793b | Yuchao Zhang | defragmentation length overflow | clean |
+| `950` drain PS delivery work during station teardown | wireless.git 67a9e80c3ca2 | Zhao Li | AP/mesh: driver notified about a removed station (power save) | clean **Dropped 2026-11-19:** ImmortalWrt subsys `487` |
+| `951` drop oversized fragments to avoid extra_len overflow | wireless.git 5e4f3509793b | Yuchao Zhang | defragmentation length overflow | clean **Dropped 2026-11-19:** ImmortalWrt subsys `489` |
 | `952` fix mesh fast xmit path deletion UAF | wireless.git ee3aadc43ea6 | Zihan Xi | **mesh**: use-after-free in the fast-xmit cache | clean |
 | `953` minstrel_ht: validate fixed rate index | wireless.git 15fb9e3cea55 | Yuqi Xu | out-of-bounds via debugfs `fixed_rate_idx` | clean (ath12k does not use minstrel; other drivers do) |
 | `954` handle empty FILS association request payload | wireless.git 5bfd4b0b40b7 | Yuqi Xu | FILS STA | clean |
-| `955` fix RTS threshold setting for single-radio PHY | wireless.git 9eda41e32263 | Stanislaw Gruszka | RTS threshold ignored on single-radio PHYs since per-radio RTS | clean |
+| `955` fix RTS threshold setting for single-radio PHY | wireless.git 9eda41e32263 | Stanislaw Gruszka | RTS threshold ignored on single-radio PHYs since per-radio RTS | clean **Dropped 2026-11-19:** ImmortalWrt subsys `490` |
 | `956` validate TX status rate metadata | wireless.git 6bdcdb31318c | Yuqi Xu | out-of-bounds in minstrel_ht | clean |
-| `957` shut down RX BA session timer on teardown | wireless.git e588e83e5c7a | Zhao Li | use-after-free of the BA session timer | clean |
+| `957` shut down RX BA session timer on teardown | wireless.git e588e83e5c7a | Zhao Li | use-after-free of the BA session timer | clean **Dropped 2026-11-19:** ImmortalWrt subsys `488` |
 | `958` preserve hidden-group beacon IE ownership | wireless.git cc45f313d855 | Zhao Li | double free of borrowed beacon IEs after a channel switch | clean |
 | `959` prevent AP VLAN tx from other interfaces | wireless.git 7f93ca31f7fd | Felix Fietkau | **VLAN isolation**: a unicast frame sent on one VLAN interface reaches a station of another VLAN of the same BSS | clean |
 | `960` set info->band for 802.3 encap offload frames | wireless.git 4febc02cd02f | Felix Fietkau | **ath12k (encap offload)**: rate lookup uses band 0 for 802.3 frames on non-MLD interfaces | clean **Dropped 2026-10-12:** ImmortalWrt subsys/006 (`18d0619283`), same commit |
 | `961` reject invalid 320 MHz CSA bandwidth | wireless.git 56e236759f0a | Ruide Cao | STA: uninitialised width from a bogus CSA | clean |
 | `962` fix slab-out-of-bounds read in `ieee80211_monitor_select_queue()` | wireless.git 6f63e919fe1e | Cen Zhang | monitor injection over-read | clean |
-| `963` fix RCU dereference in throughput estimate | mainline aa0069bd920a | Johannes Berg | fixes OpenWrt's own subsys/361 (lockdep) | **adapted** to the older form of 361 OpenWrt carries |
+| `963` fix RCU dereference in throughput estimate | mainline aa0069bd920a | Johannes Berg | fixes OpenWrt's own subsys/361 (lockdep) | **adapted** to the older form of 361 OpenWrt carries **Dropped 2026-11-19:** folded into ImmortalWrt subsys `361` by `e4d0856463` |
 | `964` keep fallback association elements alive | wireless.git a10a2f80476d | Zhao Li | STA: use-after-free when associating to a non-transmitted MBSSID profile | **adapted**: declaration context differs |
 | `980` verify if AP_VLAN belongs to the correct AP | mainline ba7a79b9bc87 (v7.3-rc4) | Slawomir Stepien | `NL80211_ATTR_STA_VLAN` may point at a VLAN of another AP | **test**. Requires the AP_VLAN to have the AP netdev's MAC. This does not break dynamic VLAN on an AP MLD (checked in the code review): hostapd's `hostapd_vlan_if_add()` uses the MLD address when `mld_ap` is set, and mac80211 already binds an AP_VLAN to its AP only when the addresses match (`ieee80211_check_concurrent_iface()`) |
 | `981` do not support direct add of station to AP_VLAN interfaces | mainline 4ae3128c2303 | Slawomir Stepien | prerequisite of 983 | **test** |
@@ -499,7 +499,7 @@ country exists (our wifi-scripts 951 still handles `00`).
 | `901-WNM-Fix-subelement-length-check-WNM-sleep-mode-exit` | hostap dd81452ef | Jouni Malinen | STA over-read on a malformed WNM sleep exit | clean |
 | `902-WNM-Fix-group-key-parsing-from-WNM-sleep-mode-exit` | hostap a0528607c | Jouni Malinen | STA ignores BIGTK with 256-bit group management ciphers | needs 901 |
 | `903-RADIUS-Fix-Message-Authenticator-attribute-validatio` | hostap aa02cfa56 | Jouni Malinen | 16-byte OOB read/write on a malformed RADIUS Message-Authenticator (crash) | clean |
-| `904-AP-MLD-Use-a-larger-buffer-for-association-response` | hostap c64dce6da | Jouni Malinen | **MLO**: (Re)Assoc Response buffer too small for large MLEs | clean |
+| `904-AP-MLD-Use-a-larger-buffer-for-association-response` | hostap c64dce6da | Jouni Malinen | **MLO**: (Re)Assoc Response buffer too small for large MLEs | clean **Dropped 2026-11-19:** ImmortalWrt hostapd `186-ap-mld-announce-the-removal-of-an-affiliated-ap` counts the Basic ML element (and the Reconfiguration ML element) in `hostapd_eid_eht_ml_assoc_len()` |
 | `905-AP-MLD-Resize-the-temporary-buffer-for-MLE-construct` | hostap 8a5291522 | Jouni Malinen | **MLO**: MLE temporary buffer overflow | clean |
 | `906-AP-MLD-Check-remaining-room-in-Key-Delivery-element-` | hostap 93ed7afaa | Jouni Malinen | **MLO**: Key Delivery element overflow with many links | clean |
 | `907-Fix-PMKSA-entry-removal` | hostap e691ab4ce | Jouni Malinen | infinite loop in `pmksa_cache_remove()` (STA) | clean |
@@ -511,7 +511,7 @@ country exists (our wifi-scripts 951 still handles `00`).
 | `913-SAE-Make-sure-the-needed-state-is-available-in-sae_w` | hostap 0605d9ddc | Jouni Malinen | NULL use in SAE confirm error paths | clean |
 | `914-AP-Avoid-NULL-as-snprintf-s-argument-for-BSS-transit` | hostap 9f6ee4d90 | Brandon Arrendondo | NULL `%s` in BSS-TM-QUERY | clean |
 | `915-EAP-PEAP-server-Fix-NULL-deref-on-TLS-encrypt-failur` | hostap 0da59aadc | Brandon Arrendondo | PEAP server crash on resumed TLS 1.3 when encryption fails | clean |
-| `916-nl80211-Update-AP-MLD-active_links-bitmap-during-sta` | hostap 4a9a301a2 | Manish Dharanenthiran | **MLO**: active_links not set on START_AP, link stop/remove works on a stale bitmap | clean |
+| `916-nl80211-Update-AP-MLD-active_links-bitmap-during-sta` | hostap 4a9a301a2 | Manish Dharanenthiran | **MLO**: active_links not set on START_AP, link stop/remove works on a stale bitmap | clean **2026-11-19:** refreshed, the driver_nl80211.h context gained `nl80211_get_link_id_by_freq()` |
 | `917-nl80211-Add-FT-SAE-AKMs-to-the-fallback-key_mgmt-cap` | hostap 43ee60e13 | Wei Zhang | wpa_supplicant never selects FT-SAE on drivers without AKM lists (mac80211) | clean; STA |
 | `930-AP-MLD-Break-the-mutual-ACS-deferral-between-partner` | [OpenWrt PR #25321](https://github.com/openwrt/openwrt/pull/25321) head 21956d2836 | Nilanka de Silva | **MLO + ACS**: with `channel=auto` on two or more links, each link defers to the other until the retry cap, then one link is disabled | renumbered from 361, unchanged **Dropped 2026-10-12:** ImmortalWrt `d67accc71b` (hostapd 171) defers only while a partner scans, the same fix |
 | `931-AP-find-unassociated-MLD-stations-in-ap_get_link_sta` | [OpenWrt PR #24878](https://github.com/openwrt/openwrt/pull/24878) head aede7845d1 | Alexander Astrovsky | **MLO**: auth TX status of an MLD STA re-authenticating from a new link address is not matched, so WLAN_STA_AUTH is never set | renumbered from 195; `!is_zero_ether_addr` guard added as asked in review |
@@ -529,9 +529,9 @@ needs 901.
 | `0013-hostapd-backport-MLD-reconfiguration-fixes-from-OpenWrt-main` | OpenWrt main 79444dcc68, 4c6992b13b, 87623c1e67, 9a81bf528d, b833ad3511 | Felix Fietkau | **MLO**: MLD and BSSes torn down on SSID-level changes; duplicate BSSID on reload; radio-0 link without the MLD address (~30 % unicast loss); control socket not moved on rename; uninitialised rename result | the 2026-09-29 MLD batch **Dropped 2026-10-12:** in ImmortalWrt |
 | `0014-hostapd-backport-ubus-BTM-and-MBO-methods-from-OpenWrt-main` | OpenWrt main aa99fb89a0, 400c79e6b6 | Felix Fietkau | feature sync: `mbo_assoc_disallow`, BTM query answering, beacon_req channel reports (used by steering daemons) | can be dropped on its own; 0016 applies without it **Dropped 2026-10-12:** in ImmortalWrt |
 | `0015-wifi-scripts-backport-fixes-from-OpenWrt-main` | OpenWrt main 54a6f4ee1e, 2de3225246 | Felix Fietkau | "dpp is not present in the schema"; regdomain from the provisioning partition (survives factory reset) | clean against ImmortalWrt's `mac80211.uc` **Dropped 2026-10-12:** in ImmortalWrt |
-| `0016-hostapd-fix-memory-leaks-and-a-NULL-dereference-in-ubus-code` | [OpenWrt PR #25339](https://github.com/openwrt/openwrt/pull/25339) head ab8903a1a3 (4 commits) + local refresh | Matthew Cather; Crescentm | rfkill config leaked per interface; assoc frame taxonomy leaked per STA; BTM neighbour list leaked; NULL ubus ctx in VLAN teardown (crash) | 5th entry refreshes the line numbers of the package's 601/803 **2026-10-12:** the neighbour-list commit is dropped (ImmortalWrt `47f3de3540`); the other three are kept, the 5th entry now refreshes 601, 605 and 803 |
+| `0016-hostapd-fix-memory-leaks-and-a-NULL-dereference-in-ubus-code` | [OpenWrt PR #25339](https://github.com/openwrt/openwrt/pull/25339) head ab8903a1a3 (4 commits) + local refresh | Matthew Cather; Crescentm | rfkill config leaked per interface; assoc frame taxonomy leaked per STA; BTM neighbour list leaked; NULL ubus ctx in VLAN teardown (crash) | 5th entry refreshes the line numbers of the package's 601/803 **2026-10-12:** the neighbour-list commit is dropped (ImmortalWrt `47f3de3540`); the other three are kept, the 5th entry now refreshes 601, 605 and 803 **2026-11-19:** renamed `0016-hostapd-do-not-notify-vlans-after-the-ubus-context-is-torn-down`; only the NULL ctx guard is left. The rfkill stub leak is fixed by ImmortalWrt `785608b9ee` (the stub frees the config), the taxonomy leak by `59787f0ff4`; the 601/605/803 refresh went with them |
 | `0017-wifi-scripts-fix-macaddr-random-on-MLO-interfaces` | [OpenWrt PR #24955](https://github.com/openwrt/openwrt/pull/24955) head 6d18f7aff8 | Kamil Bienkiewicz | `macaddr random` on an MLO iface: "Failed to create MLD … invalid MAC address" | Makefile bump dropped. The MLD address is redrawn on every reload (documented in the PR) **2026-10-12:** ported onto the netifd MAC allocator; still needed |
-| `0019-hostapd-bump-PKG_RELEASE` | own | Crescentm | hostapd 3 → 4, so our feed's hostapd differs from ImmortalWrt's | conflicts if ImmortalWrt bumps; then drop it **2026-10-12:** ImmortalWrt bumped hostapd to 4; replaced by `0019-hostapd-wifi-scripts-bump-PKG_RELEASE` (hostapd 4 → 5, wifi-scripts 3 → 4) |
+| `0019-hostapd-bump-PKG_RELEASE` | own | Crescentm | hostapd 3 → 4, so our feed's hostapd differs from ImmortalWrt's | conflicts if ImmortalWrt bumps; then drop it **2026-10-12:** ImmortalWrt bumped hostapd to 4; replaced by `0019-hostapd-wifi-scripts-bump-PKG_RELEASE` (hostapd 4 → 5, wifi-scripts 3 → 4) **2026-11-19:** ImmortalWrt is at hostapd 7 and wifi-scripts 5; 0019 bumps them to 8 and 6 |
 
 wifi-scripts `PKG_RELEASE` is not bumped again: 0010/0011 already take it to 4.
 (Since 2026-10-12 0010/0011 are gone and 0019 bumps wifi-scripts too.)
@@ -541,7 +541,7 @@ wifi-scripts `PKG_RELEASE` is not bumped again: 0010/0011 already take it to 4.
 | File | Source | Author | Fixes | Notes |
 |---|---|---|---|---|
 | `952-wifi-scripts-use-SAE-WPA3-EAP-for-WPA2-only-6GHz-APs` | [OpenWrt PR #23914](https://github.com/openwrt/openwrt/pull/23914) head eb7da52137 + `wpa=2` | Michael Pfeifroth; Crescentm | 6 GHz AP refused with psk/eap/wpa/psk-mixed/wpa-mixed | **rewritten** (file name kept): the PR's code (`psk`/`psk-sae` → `sae`, `eap`/`eap-eap2` → `eap2`) replaces our round-1 code, plus `config.wpa = 2` on 6 GHz, because the PR alone still leaves `wpa=1/3` for psk-mixed/wpa/wpa-mixed ("Pre-RSNA security methods are not allowed in 6 GHz", and no PMF for wpa < 2). A mock run over all 13 encryption values gives sae/eap2 with wpa=2; `none` stays 0. If #23914 is merged, 952 shrinks to the wpa line **2026-10-12:** #23914 merged (`4fed8d3c79`) and ImmortalWrt maps all 6 GHz modes itself; reduced to the TKIP filter and renamed `952-wifi-scripts-drop-TKIP-from-the-pairwise-ciphers-on-6-GHz` |
-| `953-wifi-scripts-fix-handling-for-0-dBm-TX-power-setting` | [OpenWrt PR #25479](https://github.com/openwrt/openwrt/pull/25479) head 9f2d64a219 | Shiji Yang | `txpower=0` became `auto` (full power) | Makefile bump dropped; #24637 is a duplicate |
+| `953-wifi-scripts-fix-handling-for-0-dBm-TX-power-setting` | [OpenWrt PR #25479](https://github.com/openwrt/openwrt/pull/25479) head 9f2d64a219 | Shiji Yang | `txpower=0` became `auto` (full power) | Makefile bump dropped; #24637 is a duplicate **Dropped 2026-11-19:** ImmortalWrt `5ee6f1fdbe`, same change |
 | `954-wifi-scripts-fix-wdev-fallback-to-use-sprintf-instead-of-printf` | [OpenWrt PR #24621](https://github.com/openwrt/openwrt/pull/24621) e22c137bee | Alexander Astrovsky | wdev fallback (mesh without wpa_supplicant mesh support, monitor): only the last iface per radio is set up, stale ifaces never removed | **Dropped 2026-10-12:** ImmortalWrt `1e5d762595` passes all interfaces in one call, `f892303173` |
 | `955-wifi-scripts-fix-active_ifnames-for-OWE-transition-interfaces` | [OpenWrt PR #24621](https://github.com/openwrt/openwrt/pull/24621) 2589982754 | Alexander Astrovsky | OWE transition ifname missing from the wdev keep list | needs 954 **Dropped 2026-10-12:** `active_ifnames` is gone (`1e5d762595`) |
 
@@ -681,6 +681,26 @@ Known and left as is:
 - ath12k 978 has no fallback to DMA chunks if a reserved region is too
   small (check the boot log for "host-ddr-mem too small" / "no
   mlo-global-mem").
+
+# Rebase onto ImmortalWrt `c4c69cfede` (2026-11-19)
+
+Base: ImmortalWrt master `c4c69cfede`, kernel 6.18.60, mac80211 =
+backports 7.2 `PKG_RELEASE:=15`, hostapd `831364bf02` `PKG_RELEASE:=7`
+(8 with our 0019), wifi-scripts `PKG_RELEASE:=5` (6 with our 0019),
+iwinfo unchanged. The per-patch verdicts are in
+[README.md](README.md#rebase-onto-immortalwrt-c4c69cfede-2026-11-19).
+In short: subsys 946, 947, 950, 951, 955, 957 and 963, ath12k 906 and
+920, hostapd 904 and wifi-scripts 953 are dropped because ImmortalWrt has
+them or an equivalent; 0016 keeps only the NULL ubus ctx guard; 0019
+bumps to 8 and 6; hostapd 916 was refreshed with fuzz and checked by
+hand; the remaining offsets were quilt-refreshed (line numbers).
+
+ImmortalWrt now carries its own hostapd patches 880–926 (MLD, EMLSR/EMLMR,
+AP Removal Timer, ubus bans and refusals). Ours (900–917, 931, 950, 980)
+keep their names and apply in between them by name order; all of them
+apply at fuzz 0 on top. The hardware checklist below still applies; add
+to it: an AP MLD with a link removal (ImmortalWrt's new 186 and 921–926
+change that path, our 916 and 931 sit next to it).
 
 # Rebase onto ImmortalWrt `da63f7d6ac` (2026-10-12)
 

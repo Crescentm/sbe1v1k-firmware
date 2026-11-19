@@ -29,14 +29,14 @@ Spectrum / Askey **SBE1V1K**（RTQ7300T，IPQ9570，3×QCN9274）的 ImmortalWrt
 | 网口断开后 PPE 发送队列卡住、组播队列饿死、EEE 引起断流 | PPE 断链排空、组播 DRR、关闭 EEE（移植 qualcommax PR #24188/#24252，测试档） |
 | phylink、qca808x LED 极性、MP5496 供电名、温控等上游已修的问题 | 回移主线修复 |
 | lan2/lan3 灯不受控 | DTS 声明 lan2/lan3 端口灯（测试档） |
-| rtpengine 内核模块在新内核上编不过 | Kbuild 修复（rtpengine 上游 `38700abf0b79`） |
+| rtpengine 内核模块在新内核上编不过 | Kbuild 修复（rtpengine 上游 `38700abf0b79`，telephony 源自 `8695daf` 起自带） |
 | mac80211/cfg80211 的 use-after-free、mesh、CSA、VLAN 等问题 | Linux 7.2.y 稳定版、7.3-rc 和 wireless.git 的全部相关修复 |
 | ath12k 的 MLO、SSR、TX DMA、扫描死锁、监听模式等问题 | 主线、ath-next 和邮件列表的 ath12k 修复；MLO 崩溃恢复等较新的放在测试档 |
 | hostapd 的 MLO 重新认证、内存越界、内存泄漏、ubus 空指针等问题 | hostap.git 2.12 之后的修复和 OpenWrt PR #24878、#25339 |
 | 6 GHz 上带 TKIP 的加密起不来、0 dBm 发射功率无效、MLO 下 `macaddr random` 无效 | wifi-scripts 修复（OpenWrt PR #25479、#24955 等） |
 
 每个补丁的来源、原作者和上游状态见 [patches/README.md](patches/README.md)。补丁最近一次对照的是
-ImmortalWrt master `da63f7d6ac`（2026-10-12，内核 6.18.55）。标为**测试档**的补丁各自独立，
+ImmortalWrt master `c4c69cfede`（2026-11-18，内核 6.18.60）。标为**测试档**的补丁各自独立，
 出问题时可以单独删掉。
 
 预装：中文 LuCI、fullcone NAT、UPnP、SQM（cake）、WireGuard、irqbalance 及常用诊断工具，

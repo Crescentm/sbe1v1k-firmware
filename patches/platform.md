@@ -14,6 +14,15 @@ all qualcommbe patches (with ours), 545 in total, no fuzz, no offset. The
 DTS patches (`tree/0002`, `0004`–`0006`, `0030`, `0031`) apply with
 `git apply` unchanged. See [README.md](README.md#rebase-onto-immortalwrt-da63f7d6ac-2026-10-12).
 
+**2026-11-19:** rebased onto ImmortalWrt master `c4c69cfede` (kernel
+6.18.60). `tree/0002` shrinks: ImmortalWrt dropped l5 itself
+(`0c517f6d77`) and disables the QCE crypto nodes in `ipq9574.dtsi`
+(`704bb1dbbf`); the s1 settings and the QSGMII TX amplitude stay. R6
+(rtpengine) is dropped: the telephony feed carries the same fix since
+`8695daf`. `0420` is refreshed (line numbers); everything else applies to
+6.18.60 unchanged, 681 patches with quilt at fuzz 0. See
+[README.md](README.md#rebase-onto-immortalwrt-c4c69cfede-2026-11-19).
+
 | Item | Files |
 |---|---|
 | ~~K1 kernel 6.18.54~~ (dropped 2026-10-12, ImmortalWrt is on 6.18.55) | ~~`tree/0003-kernel-bump-6.18-to-6.18.54.patch`~~ |
@@ -341,7 +350,7 @@ others.
 | R4e thermal step_wise stale vote | dropped 2026-10-12 (in 6.18.55) | was `overlay/.../patches-6.18/0433` |
 | R4f dtc warnings | fix | `tree/0030-sbe1v1k-dts-fix-dtc-warnings.patch` |
 | R5 fan PWM 1 kHz | dropped | was `tree/0032-sbe1v1k-dts-fan-pwm-1khz.patch` |
-| R6 rtpengine kmod on 6.18 | fix | `overlay/feeds/telephony/net/rtpengine/patches/105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch` |
+| R6 rtpengine kmod on 6.18 | fix | `overlay/feeds/telephony/net/rtpengine/patches/105-kernel-module-use-ccflags-y-instead-of-EXTRA_CFLAGS.patch` **Dropped 2026-11-19:** the telephony feed carries the same fix as `105-kernel-module-use-ccflags-instead-of-EXTRA_CFLAGS.patch` since `8695daf`; ours sorted after it and would no longer apply |
 | R8 lan2/lan3 LEDs | test | `tree/0031-sbe1v1k-dts-lan2-lan3-phy-leds.patch`, `overlay/.../ipq95xx/base-files/etc/board.d/01_leds` |
 
 All the new kernel patches sit in the qualcommbe target directory, even
