@@ -29,11 +29,9 @@ Link: https://github.com/openwrt/openwrt/pull/24878
  src/ap/sta_info.c | 6 ++++--
  1 file changed, 4 insertions(+), 2 deletions(-)
 
-diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
-index e2b2d6bd6..b61b20d91 100644
 --- a/src/ap/sta_info.c
 +++ b/src/ap/sta_info.c
-@@ -85,8 +85,10 @@ struct sta_info * ap_get_link_sta(struct hostapd_data *hapd,
+@@ -150,8 +150,10 @@ struct sta_info * ap_get_link_sta(struct
  
  	for (link_sta = hapd->sta_list; link_sta; link_sta = link_sta->next) {
  		if (link_sta->mld_info.mld_sta &&

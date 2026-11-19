@@ -27,7 +27,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
 
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -21065,6 +21065,9 @@ void cfg80211_rx_unprot_mlme_mgmt(struct
+@@ -21686,6 +21686,9 @@ void cfg80211_rx_unprot_mlme_mgmt(struct
  	} else if (ieee80211_is_disassoc(mgmt->frame_control)) {
  		event.cmd = NL80211_CMD_UNPROT_DISASSOCIATE;
  	} else if (ieee80211_is_beacon(mgmt->frame_control)) {

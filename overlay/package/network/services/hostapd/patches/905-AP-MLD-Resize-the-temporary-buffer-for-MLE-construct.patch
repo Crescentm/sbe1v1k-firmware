@@ -16,11 +16,9 @@ Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
  src/ap/ieee802_11_eht.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
-diff --git a/src/ap/ieee802_11_eht.c b/src/ap/ieee802_11_eht.c
-index 02e360c23..d8d06a714 100644
 --- a/src/ap/ieee802_11_eht.c
 +++ b/src/ap/ieee802_11_eht.c
-@@ -560,6 +560,14 @@ u8 * hostapd_eid_eht_basic_ml_common(struct hostapd_data *hapd,
+@@ -569,6 +569,14 @@ u8 * hostapd_eid_eht_basic_ml_common(str
  
  		total_len = sta_info_len + link->resp_sta_profile_len;
  

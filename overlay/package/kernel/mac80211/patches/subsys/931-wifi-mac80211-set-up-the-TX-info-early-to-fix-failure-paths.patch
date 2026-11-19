@@ -27,7 +27,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
 
 --- a/net/mac80211/tx.c
 +++ b/net/mac80211/tx.c
-@@ -2998,10 +2998,23 @@ static struct sk_buff *ieee80211_build_h
+@@ -3126,10 +3126,23 @@ static struct sk_buff *ieee80211_build_h
  	 */
  	skb = skb_share_check(skb, GFP_ATOMIC);
  	if (unlikely(!skb)) {
@@ -53,7 +53,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  	hdr.frame_control = fc;
  	hdr.duration_id = 0;
  	hdr.seq_ctrl = 0;
-@@ -3040,10 +3053,8 @@ static struct sk_buff *ieee80211_build_h
+@@ -3168,10 +3181,8 @@ static struct sk_buff *ieee80211_build_h
  		head_need += local->tx_headroom;
  		head_need = max_t(int, 0, head_need);
  		if (ieee80211_skb_resize(sdata, skb, head_need, ENCRYPT_DATA)) {
@@ -65,7 +65,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  		}
  	}
  
-@@ -3070,16 +3081,6 @@ static struct sk_buff *ieee80211_build_h
+@@ -3198,16 +3209,6 @@ static struct sk_buff *ieee80211_build_h
  
  	skb_reset_mac_header(skb);
  
@@ -82,7 +82,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  	if (likely(!cookie)) {
  		ctrl_flags |= u32_encode_bits(link_id,
  					      IEEE80211_TX_CTRL_MLO_LINK);
-@@ -3103,16 +3104,17 @@ static struct sk_buff *ieee80211_build_h
+@@ -3231,16 +3232,17 @@ static struct sk_buff *ieee80211_build_h
  					     pre_conf_link_id, link_id);
  #endif
  			ret = -EINVAL;

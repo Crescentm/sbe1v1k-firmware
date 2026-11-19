@@ -13,11 +13,9 @@ Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
  src/common/sae.c | 6 +++++-
  1 file changed, 5 insertions(+), 1 deletion(-)
 
-diff --git a/src/common/sae.c b/src/common/sae.c
-index 9dfe9f476..cfd68f190 100644
 --- a/src/common/sae.c
 +++ b/src/common/sae.c
-@@ -2408,8 +2408,12 @@ int sae_write_confirm(struct sae_data *sae, struct wpabuf *buf)
+@@ -2402,8 +2402,12 @@ int sae_write_confirm(struct sae_data *s
  	size_t hash_len;
  	int res;
  

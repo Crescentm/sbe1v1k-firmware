@@ -38,7 +38,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
 
 --- a/net/mac80211/mlme.c
 +++ b/net/mac80211/mlme.c
-@@ -8040,7 +8040,7 @@ ieee80211_mgd_check_cross_link_csa(struc
+@@ -8110,7 +8110,7 @@ ieee80211_mgd_check_cross_link_csa(struc
  		prof = (void *)sta_profiles[link_id];
  		prof_elems = ieee802_11_parse_elems(prof->variable +
  						    (prof->sta_info_len - 1),

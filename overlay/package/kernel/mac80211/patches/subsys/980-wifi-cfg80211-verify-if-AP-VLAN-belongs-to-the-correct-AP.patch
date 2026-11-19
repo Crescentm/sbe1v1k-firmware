@@ -23,7 +23,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
 
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -8975,10 +8975,12 @@ int cfg80211_check_station_change(struct
+@@ -9039,10 +9039,12 @@ int cfg80211_check_station_change(struct
  EXPORT_SYMBOL(cfg80211_check_station_change);
  
  /*
@@ -38,7 +38,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  {
  	struct nlattr *vlanattr = info->attrs[NL80211_ATTR_STA_VLAN];
  	struct net_device *v;
-@@ -9008,6 +9010,12 @@ static struct net_device *get_vlan(struc
+@@ -9072,6 +9074,12 @@ static struct net_device *get_vlan(struc
  		goto error;
  	}
  
@@ -51,7 +51,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  	return v;
   error:
  	dev_put(v);
-@@ -9305,7 +9313,7 @@ static int nl80211_set_station(struct sk
+@@ -9369,7 +9377,7 @@ static int nl80211_set_station(struct sk
  	if (err)
  		return err;
  
@@ -60,7 +60,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  	if (IS_ERR(params.vlan))
  		return PTR_ERR(params.vlan);
  
-@@ -9606,7 +9614,7 @@ static int nl80211_new_station(struct sk
+@@ -9670,7 +9678,7 @@ static int nl80211_new_station(struct sk
  		}
  
  		/* must be last in here for error handling */

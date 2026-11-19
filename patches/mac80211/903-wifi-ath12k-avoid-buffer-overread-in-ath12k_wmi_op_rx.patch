@@ -22,7 +22,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -10283,12 +10283,12 @@ static void ath12k_wmi_op_rx(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -10286,12 +10286,12 @@ static void ath12k_wmi_op_rx(struct ath1
  	struct wmi_cmd_hdr *cmd_hdr;
  	enum wmi_tlv_event_id id;
  

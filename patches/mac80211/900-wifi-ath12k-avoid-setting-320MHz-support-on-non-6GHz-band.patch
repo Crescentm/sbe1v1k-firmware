@@ -45,7 +45,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -5157,6 +5157,7 @@ static void ath12k_wmi_eht_caps_parse(struct ath12k_pdev *pdev, u32 band,
+@@ -5160,6 +5160,7 @@ static void ath12k_wmi_eht_caps_parse(st
  				       __le32 cap_info_internal)
  {
  	struct ath12k_band_cap *cap_band = &pdev->cap.band[band];
@@ -53,7 +53,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	u32 support_320mhz;
  	u8 i;
  
-@@ -5170,8 +5171,22 @@ static void ath12k_wmi_eht_caps_parse(struct ath12k_pdev *pdev, u32 band,
+@@ -5173,8 +5174,22 @@ static void ath12k_wmi_eht_caps_parse(st
  	for (i = 0; i < WMI_MAX_EHTCAP_PHY_SIZE; i++)
  		cap_band->eht_cap_phy_info[i] = le32_to_cpu(cap_phy_info[i]);
  

@@ -22,11 +22,9 @@ is left.
  files-ucode/usr/share/ucode/wifi/ap.uc | 10 ++++++++++
  1 file changed, 10 insertions(+)
 
-diff --git a/files-ucode/usr/share/ucode/wifi/ap.uc b/files-ucode/usr/share/ucode/wifi/ap.uc
-index de474351f9..dd5ecdb1f7 100644
 --- a/files-ucode/usr/share/ucode/wifi/ap.uc
 +++ b/files-ucode/usr/share/ucode/wifi/ap.uc
-@@ -717,6 +717,16 @@ export function generate(interface, data, config, vlans, stas, phy_features) {
+@@ -730,6 +730,16 @@ export function generate(interface, data
  		config.mlo ? (config.mlo_bands ?? []) : null);
  	iface.parse_encryption(config, data.config, phy_features, rsno2);
  

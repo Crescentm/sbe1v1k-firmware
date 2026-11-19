@@ -31,11 +31,9 @@ Signed-off-by: Wei Zhang <wei.zhang@oss.qualcomm.com>
  src/drivers/driver_nl80211_capa.c | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
-diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
-index 43ce19834..0a8178d26 100644
 --- a/src/drivers/driver_nl80211_capa.c
 +++ b/src/drivers/driver_nl80211_capa.c
-@@ -1979,7 +1979,9 @@ int wpa_driver_nl80211_capa(struct wpa_driver_nl80211_data *drv)
+@@ -1991,7 +1991,9 @@ int wpa_driver_nl80211_capa(struct wpa_d
  				WPA_DRIVER_CAPA_KEY_MGMT_FT_FILS_SHA256 |
  				WPA_DRIVER_CAPA_KEY_MGMT_FT_FILS_SHA384 |
  				WPA_DRIVER_CAPA_KEY_MGMT_SAE_EXT_KEY |

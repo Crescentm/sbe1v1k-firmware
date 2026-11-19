@@ -39,11 +39,9 @@ Signed-off-by: Crescentm <guyues@outlook.com>
  arch/arm64/boot/dts/qcom/ipq9574.dtsi | 16 ++++++++++++++++
  1 file changed, 16 insertions(+)
 
-diff --git a/arch/arm64/boot/dts/qcom/ipq9574.dtsi b/arch/arm64/boot/dts/qcom/ipq9574.dtsi
-index ad49949c0..20601b675 100644
 --- a/arch/arm64/boot/dts/qcom/ipq9574.dtsi
 +++ b/arch/arm64/boot/dts/qcom/ipq9574.dtsi
-@@ -772,6 +772,21 @@ usb_0_qmpphy: usb-phy@7d000 {
+@@ -803,6 +803,21 @@
  			status = "disabled";
  		};
  
@@ -65,7 +63,7 @@ index ad49949c0..20601b675 100644
  		usb3: usb@8af8800 {
  			compatible = "qcom,ipq9574-dwc3", "qcom,dwc3";
  			reg = <0x08af8800 0x400>;
-@@ -855,6 +870,7 @@ watchdog: watchdog@b017000 {
+@@ -886,6 +901,7 @@
  			reg = <0x0b017000 0x1000>;
  			interrupts = <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>;
  			clocks = <&sleep_clk>;

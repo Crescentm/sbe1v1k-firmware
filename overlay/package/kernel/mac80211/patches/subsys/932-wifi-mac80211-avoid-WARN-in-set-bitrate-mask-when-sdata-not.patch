@@ -60,7 +60,7 @@ Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 
 --- a/net/mac80211/cfg.c
 +++ b/net/mac80211/cfg.c
-@@ -4130,6 +4130,9 @@ static int ieee80211_set_bitrate_mask(st
+@@ -4261,6 +4261,9 @@ static int ieee80211_set_bitrate_mask(st
  	if (!ieee80211_sdata_running(sdata))
  		return -ENETDOWN;
  

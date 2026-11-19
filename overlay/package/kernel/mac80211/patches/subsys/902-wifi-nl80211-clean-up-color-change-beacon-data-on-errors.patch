@@ -29,7 +29,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
 
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -18912,15 +18912,15 @@ static int nl80211_color_change(struct s
+@@ -19396,15 +19396,15 @@ static int nl80211_color_change(struct s
  	if (!wdev->links[params.link_id].ap.beacon_interval)
  		return -EINVAL;
  

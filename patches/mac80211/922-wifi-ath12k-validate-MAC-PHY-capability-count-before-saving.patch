@@ -23,7 +23,7 @@ Link: https://patchwork.kernel.org/project/linux-wireless/patch/20260925121739.2
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -4993,7 +4993,7 @@ ath12k_wmi_save_mac_phy_info(struct ath12k_base *ab,
+@@ -4994,7 +4994,7 @@ ath12k_wmi_save_mac_phy_info(struct ath1
  					__le32_to_cpu(mac_phy_cap->high_5ghz_chan_freq);
  }
  
@@ -32,7 +32,7 @@ Link: https://patchwork.kernel.org/project/linux-wireless/patch/20260925121739.2
  ath12k_wmi_save_all_mac_phy_info(struct ath12k_base *ab,
  				 struct ath12k_wmi_svc_rdy_ext_parse *svc_rdy_ext)
  {
-@@ -5004,6 +5004,20 @@ ath12k_wmi_save_all_mac_phy_info(struct ath12k_base *ab,
+@@ -5005,6 +5005,20 @@ ath12k_wmi_save_all_mac_phy_info(struct
  	u32 hw_mode_id, phy_bit_map;
  	u8 hw_idx;
  
@@ -53,7 +53,7 @@ Link: https://patchwork.kernel.org/project/linux-wireless/patch/20260925121739.2
  	mac_phy_info = &svc_ext_info->mac_phy_info[0];
  	mac_phy_cap = svc_rdy_ext->mac_phy_caps;
  
-@@ -5033,6 +5047,8 @@ ath12k_wmi_save_all_mac_phy_info(struct ath12k_base *ab,
+@@ -5034,6 +5048,8 @@ ath12k_wmi_save_all_mac_phy_info(struct
  			phy_bit_map >>= 1;
  		}
  	}
@@ -62,7 +62,7 @@ Link: https://patchwork.kernel.org/project/linux-wireless/patch/20260925121739.2
  }
  
  static int ath12k_wmi_svc_rdy_ext_parse(struct ath12k_base *ab,
-@@ -5083,7 +5099,9 @@ static int ath12k_wmi_svc_rdy_ext_parse(struct ath12k_base *ab,
+@@ -5084,7 +5100,9 @@ static int ath12k_wmi_svc_rdy_ext_parse(
  				return ret;
  			}
  

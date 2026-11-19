@@ -23,11 +23,9 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  include/net/cfg80211.h | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
-index 9ed5d34..d6cede2 100644
 --- a/include/net/cfg80211.h
 +++ b/include/net/cfg80211.h
-@@ -2806,7 +2806,7 @@ struct mesh_setup {
+@@ -2857,7 +2857,7 @@ struct mesh_setup {
  	u8 path_metric;
  	u8 auth_id;
  	const u8 *ie;

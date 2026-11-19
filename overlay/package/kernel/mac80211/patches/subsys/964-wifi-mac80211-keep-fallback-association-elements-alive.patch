@@ -30,7 +30,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
 
 --- a/net/mac80211/mlme.c
 +++ b/net/mac80211/mlme.c
-@@ -5933,6 +5933,7 @@ static bool ieee80211_assoc_config_link(
+@@ -5929,6 +5929,7 @@ static bool ieee80211_assoc_config_link(
  	bool is_6ghz = cbss->channel->band == NL80211_BAND_6GHZ;
  	bool is_s1g = cbss->channel->band == NL80211_BAND_S1GHZ;
  	const struct cfg80211_bss_ies *bss_ies = NULL;
@@ -38,7 +38,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  	struct ieee80211_supported_band *sband;
  	struct ieee802_11_elems *elems;
  	const __le16 prof_bss_param_ch_present =
-@@ -6016,7 +6017,6 @@ static bool ieee80211_assoc_config_link(
+@@ -6012,7 +6013,6 @@ static bool ieee80211_assoc_config_link(
  	     (is_5ghz && link->u.mgd.conn.mode >= IEEE80211_CONN_MODE_VHT &&
  	      (!elems->vht_cap_elem || !elems->vht_operation)))) {
  		const struct cfg80211_bss_ies *ies;
@@ -46,7 +46,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  
  		rcu_read_lock();
  		ies = rcu_dereference(cbss->ies);
-@@ -6078,7 +6078,6 @@ static bool ieee80211_assoc_config_link(
+@@ -6074,7 +6074,6 @@ static bool ieee80211_assoc_config_link(
  					   "AP bug: VHT operation missing from AssocResp\n");
  			}
  		}
@@ -54,7 +54,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  	}
  
  	/*
-@@ -6351,6 +6350,7 @@ static bool ieee80211_assoc_config_link(
+@@ -6347,6 +6346,7 @@ static bool ieee80211_assoc_config_link(
  	ret = true;
  out:
  	kfree(elems);

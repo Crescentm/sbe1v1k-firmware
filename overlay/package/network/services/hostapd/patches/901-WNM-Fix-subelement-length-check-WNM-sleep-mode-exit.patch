@@ -18,11 +18,9 @@ Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
  wpa_supplicant/wnm_sta.c | 9 ++++++---
  1 file changed, 6 insertions(+), 3 deletions(-)
 
-diff --git a/wpa_supplicant/wnm_sta.c b/wpa_supplicant/wnm_sta.c
-index 7e3b355c9..1c8b93169 100644
 --- a/wpa_supplicant/wnm_sta.c
 +++ b/wpa_supplicant/wnm_sta.c
-@@ -269,7 +269,8 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+@@ -274,7 +274,8 @@ static void wnm_sleep_mode_exit_success(
  			}
  			gtk_len = *(ptr + 4);
  			if (ptr[1] < 11 + gtk_len ||
@@ -32,7 +30,7 @@ index 7e3b355c9..1c8b93169 100644
  				wpa_printf(MSG_DEBUG, "WNM: Invalid GTK "
  					   "subelem");
  				break;
-@@ -280,7 +281,8 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+@@ -285,7 +286,8 @@ static void wnm_sleep_mode_exit_success(
  				ptr);
  			ptr += 13 + gtk_len;
  		} else if (*ptr == WNM_SLEEP_SUBELEM_IGTK) {
@@ -42,7 +40,7 @@ index 7e3b355c9..1c8b93169 100644
  				wpa_printf(MSG_DEBUG, "WNM: Too short IGTK "
  					   "subelem");
  				break;
-@@ -289,7 +291,8 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+@@ -294,7 +296,8 @@ static void wnm_sleep_mode_exit_success(
  						 WNM_SLEEP_SUBELEM_IGTK, ptr);
  			ptr += 10 + WPA_IGTK_LEN;
  		} else if (*ptr == WNM_SLEEP_SUBELEM_BIGTK) {

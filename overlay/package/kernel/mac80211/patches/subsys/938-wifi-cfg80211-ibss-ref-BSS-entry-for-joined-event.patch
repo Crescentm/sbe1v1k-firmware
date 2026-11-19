@@ -35,8 +35,6 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/wireless/util.c |  3 +--
  3 files changed, 23 insertions(+), 22 deletions(-)
 
-diff --git a/net/wireless/core.h b/net/wireless/core.h
-index 9d70270..45d35c1 100644
 --- a/net/wireless/core.h
 +++ b/net/wireless/core.h
 @@ -290,8 +290,7 @@ struct cfg80211_event {
@@ -49,7 +47,7 @@ index 9d70270..45d35c1 100644
  		} ij;
  		struct {
  			u8 peer_addr[ETH_ALEN];
-@@ -354,8 +353,7 @@ int __cfg80211_join_ibss(struct cfg80211_registered_device *rdev,
+@@ -354,8 +353,7 @@ int __cfg80211_join_ibss(struct cfg80211
  void cfg80211_clear_ibss(struct net_device *dev, bool nowext);
  int cfg80211_leave_ibss(struct cfg80211_registered_device *rdev,
  			struct net_device *dev, bool nowext);
@@ -59,8 +57,6 @@ index 9d70270..45d35c1 100644
  int cfg80211_ibss_wext_join(struct cfg80211_registered_device *rdev,
  			    struct wireless_dev *wdev);
  
-diff --git a/net/wireless/ibss.c b/net/wireless/ibss.c
-index 033ecc5..df40f6e 100644
 --- a/net/wireless/ibss.c
 +++ b/net/wireless/ibss.c
 @@ -16,26 +16,18 @@
@@ -93,7 +89,7 @@ index 033ecc5..df40f6e 100644
  
  	if (wdev->u.ibss.current_bss) {
  		cfg80211_unhold_bss(wdev->u.ibss.current_bss);
-@@ -43,17 +35,22 @@ void __cfg80211_ibss_joined(struct net_device *dev, const u8 *bssid,
+@@ -43,17 +35,22 @@ void __cfg80211_ibss_joined(struct net_d
  	}
  
  	cfg80211_hold_bss(bss_from_pub(bss));
@@ -118,7 +114,7 @@ index 033ecc5..df40f6e 100644
  }
  
  void cfg80211_ibss_joined(struct net_device *dev, const u8 *bssid,
-@@ -62,6 +59,7 @@ void cfg80211_ibss_joined(struct net_device *dev, const u8 *bssid,
+@@ -62,6 +59,7 @@ void cfg80211_ibss_joined(struct net_dev
  	struct wireless_dev *wdev = dev->ieee80211_ptr;
  	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
  	struct cfg80211_event *ev;
@@ -126,7 +122,7 @@ index 033ecc5..df40f6e 100644
  	unsigned long flags;
  
  	trace_cfg80211_ibss_joined(dev, bssid, channel);
-@@ -69,13 +67,19 @@ void cfg80211_ibss_joined(struct net_device *dev, const u8 *bssid,
+@@ -69,13 +67,19 @@ void cfg80211_ibss_joined(struct net_dev
  	if (WARN_ON(!channel))
  		return;
  
@@ -149,11 +145,9 @@ index 033ecc5..df40f6e 100644
  
  	spin_lock_irqsave(&wdev->event_lock, flags);
  	list_add_tail(&ev->list, &wdev->event_list);
-diff --git a/net/wireless/util.c b/net/wireless/util.c
-index ef56fe0..12285bb 100644
 --- a/net/wireless/util.c
 +++ b/net/wireless/util.c
-@@ -1184,8 +1184,7 @@ void cfg80211_process_wdev_events(struct wireless_dev *wdev)
+@@ -1195,8 +1195,7 @@ void cfg80211_process_wdev_events(struct
  						!ev->dc.locally_generated);
  			break;
  		case EVENT_IBSS_JOINED:

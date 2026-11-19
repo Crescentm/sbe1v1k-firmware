@@ -76,7 +76,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	bool host_alloc_ml_id;
 --- a/drivers/net/wireless/ath/ath12k/mac.c
 +++ b/drivers/net/wireless/ath/ath12k/mac.c
-@@ -13631,52 +13631,54 @@ ath12k_mac_update_bss_chan_survey(struct ath12k *ar,
+@@ -13631,52 +13631,54 @@ ath12k_mac_update_bss_chan_survey(struct
  int ath12k_mac_op_get_survey(struct ieee80211_hw *hw, int idx,
  			     struct survey_info *survey)
  {
@@ -146,7 +146,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  
  	if (ar->rx_channel == survey->channel)
  		survey->filled |= SURVEY_INFO_IN_USE;
-@@ -15358,6 +15360,7 @@ static struct ath12k_hw *ath12k_mac_hw_allocate(struct ath12k_hw_group *ag,
+@@ -15358,6 +15360,7 @@ static struct ath12k_hw *ath12k_mac_hw_a
  	mutex_init(&ah->hw_mutex);
  	init_completion(&ah->peer_ml_id_done);
  
@@ -156,7 +156,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -6731,16 +6731,12 @@ static int ath12k_pull_roam_ev(struct ath12k_base *ab, struct sk_buff *skb,
+@@ -6734,16 +6734,12 @@ static int ath12k_pull_roam_ev(struct at
  	return 0;
  }
  
@@ -174,7 +174,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  		sband = hw->wiphy->bands[band];
  		if (!sband)
  			continue;
-@@ -7647,6 +7643,7 @@ static void ath12k_chan_info_event(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -7650,6 +7646,7 @@ static void ath12k_chan_info_event(struc
  {
  	struct wmi_chan_info_event ch_info_ev = {};
  	struct ath12k *ar;
@@ -182,7 +182,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	struct survey_info *survey;
  	int idx;
  	/* HW channel counters frequency value in hertz */
-@@ -7678,6 +7675,7 @@ static void ath12k_chan_info_event(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -7681,6 +7678,7 @@ static void ath12k_chan_info_event(struc
  		return;
  	}
  	spin_lock_bh(&ar->data_lock);
@@ -190,7 +190,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  
  	switch (ar->scan.state) {
  	case ATH12K_SCAN_IDLE:
-@@ -7689,8 +7687,8 @@ static void ath12k_chan_info_event(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -7692,8 +7690,8 @@ static void ath12k_chan_info_event(struc
  		break;
  	}
  
@@ -201,7 +201,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  		ath12k_warn(ab, "chan info: invalid frequency %d (idx %d out of bounds)\n",
  			    ch_info_ev.freq, idx);
  		goto exit;
-@@ -7703,14 +7701,20 @@ static void ath12k_chan_info_event(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -7706,14 +7704,20 @@ static void ath12k_chan_info_event(struc
  		cc_freq_hz = (le32_to_cpu(ch_info_ev.mac_clk_mhz) * 1000);
  
  	if (ch_info_ev.cmd_flags == WMI_CHAN_INFO_START_RESP) {
@@ -230,7 +230,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	}
  exit:
  	spin_unlock_bh(&ar->data_lock);
-@@ -7723,6 +7727,7 @@ ath12k_pdev_bss_chan_info_event(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -7726,6 +7730,7 @@ ath12k_pdev_bss_chan_info_event(struct a
  	struct wmi_pdev_bss_chan_info_event bss_ch_info_ev = {};
  	struct survey_info *survey;
  	struct ath12k *ar;
@@ -238,7 +238,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	u32 cc_freq_hz = ab->cc_freq_hz;
  	u64 busy, total, tx, rx, rx_bss;
  	int idx;
-@@ -7763,28 +7768,31 @@ ath12k_pdev_bss_chan_info_event(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -7766,28 +7771,31 @@ ath12k_pdev_bss_chan_info_event(struct a
  		return;
  	}
  

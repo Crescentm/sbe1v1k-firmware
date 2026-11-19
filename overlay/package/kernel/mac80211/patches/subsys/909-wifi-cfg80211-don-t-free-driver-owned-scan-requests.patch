@@ -33,11 +33,9 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/wireless/scan.c     | 31 +++++++++++++++++++++++++++++--
  4 files changed, 47 insertions(+), 8 deletions(-)
 
-diff --git a/net/wireless/core.c b/net/wireless/core.c
-index 7487db5..e3266f6 100644
 --- a/net/wireless/core.c
 +++ b/net/wireless/core.c
-@@ -260,9 +260,8 @@ void cfg80211_stop_p2p_device(struct cfg80211_registered_device *rdev,
+@@ -260,9 +260,8 @@ void cfg80211_stop_p2p_device(struct cfg
  	rdev->opencount--;
  
  	if (rdev->scan_req && rdev->scan_req->req.wdev == wdev) {
@@ -49,7 +47,7 @@ index 7487db5..e3266f6 100644
  			rdev->scan_req->info.aborted = true;
  		___cfg80211_scan_done(rdev, false);
  	}
-@@ -1763,9 +1762,9 @@ static int cfg80211_netdev_notifier_call(struct notifier_block *nb,
+@@ -1773,9 +1772,9 @@ static int cfg80211_netdev_notifier_call
  		wiphy_lock(&rdev->wiphy);
  		cfg80211_update_iface_num(rdev, wdev->iftype, -1);
  		if (rdev->scan_req && rdev->scan_req->req.wdev == wdev) {
@@ -62,8 +60,6 @@ index 7487db5..e3266f6 100644
  				rdev->scan_req->info.aborted = true;
  			___cfg80211_scan_done(rdev, false);
  		}
-diff --git a/net/wireless/core.h b/net/wireless/core.h
-index 41586ef..9d70270 100644
 --- a/net/wireless/core.h
 +++ b/net/wireless/core.h
 @@ -24,6 +24,16 @@
@@ -83,11 +79,9 @@ index 41586ef..9d70270 100644
  	/* must be last - variable members */
  	struct cfg80211_scan_request req;
  };
-diff --git a/net/wireless/rdev-ops.h b/net/wireless/rdev-ops.h
-index 306294c..f25fdf3 100644
 --- a/net/wireless/rdev-ops.h
 +++ b/net/wireless/rdev-ops.h
-@@ -464,7 +464,10 @@ static inline int rdev_scan(struct cfg80211_registered_device *rdev,
+@@ -464,7 +464,10 @@ static inline int rdev_scan(struct cfg80
  		return -EINVAL;
  
  	trace_rdev_scan(&rdev->wiphy, request);
@@ -98,11 +92,9 @@ index 306294c..f25fdf3 100644
  	trace_rdev_return_int(&rdev->wiphy, ret);
  	return ret;
  }
-diff --git a/net/wireless/scan.c b/net/wireless/scan.c
-index 8c4d61e..397a8ad 100644
 --- a/net/wireless/scan.c
 +++ b/net/wireless/scan.c
-@@ -1114,6 +1114,21 @@ int cfg80211_scan(struct cfg80211_registered_device *rdev)
+@@ -1114,6 +1114,21 @@ int cfg80211_scan(struct cfg80211_regist
  	return 0;
  }
  
@@ -124,7 +116,7 @@ index 8c4d61e..397a8ad 100644
  void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev,
  			   bool send_message)
  {
-@@ -1173,10 +1188,10 @@ void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev,
+@@ -1173,10 +1188,10 @@ void ___cfg80211_scan_done(struct cfg802
  
  	dev_put(wdev->netdev);
  
@@ -137,7 +129,7 @@ index 8c4d61e..397a8ad 100644
  	rdev->scan_req = NULL;
  
  	if (!send_message)
-@@ -1199,6 +1214,18 @@ void cfg80211_scan_done(struct cfg80211_scan_request *request,
+@@ -1199,6 +1214,18 @@ void cfg80211_scan_done(struct cfg80211_
  	struct cfg80211_scan_info old_info = intreq->info;
  
  	trace_cfg80211_scan_done(intreq, info);

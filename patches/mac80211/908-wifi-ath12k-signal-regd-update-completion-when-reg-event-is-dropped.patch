@@ -37,7 +37,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -6964,6 +6964,14 @@ static int ath12k_reg_chan_list_event(struct ath12k_base *ab, struct sk_buff *sk
+@@ -6965,6 +6965,14 @@ static int ath12k_reg_chan_list_event(st
  		goto mem_free;
  	}
  
@@ -52,7 +52,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	ret = ath12k_reg_validate_reg_info(ab, reg_info);
  	if (ret == ATH12K_REG_STATUS_FALLBACK) {
  		ath12k_warn(ab, "failed to validate reg info %d\n", ret);
-@@ -6980,7 +6988,6 @@ static int ath12k_reg_chan_list_event(struct ath12k_base *ab, struct sk_buff *sk
+@@ -6981,7 +6989,6 @@ static int ath12k_reg_chan_list_event(st
  	}
  
  	/* free old reg_info if it exist */
@@ -60,7 +60,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	if (ab->reg_info[pdev_idx]) {
  		ath12k_reg_reset_reg_info(ab->reg_info[pdev_idx]);
  		kfree(ab->reg_info[pdev_idx]);
-@@ -7019,7 +7026,7 @@ fallback:
+@@ -7020,7 +7027,7 @@ fallback:
  
  out:
  	/* In some error cases, even a valid pdev_idx might not be available */

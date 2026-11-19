@@ -29,7 +29,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -207,6 +207,8 @@ static const struct ath12k_wmi_tlv_policy ath12k_wmi_tlv_policies[] = {
+@@ -207,6 +207,8 @@ static const struct ath12k_wmi_tlv_polic
  		.min_len = sizeof(struct wmi_per_chain_rssi_stat_params) },
  	[WMI_TAG_OBSS_COLOR_COLLISION_EVT] = {
  		.min_len = sizeof(struct wmi_obss_color_collision_event) },
@@ -38,7 +38,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  };
  
  __le32 ath12k_wmi_tlv_hdr(u32 cmd, u32 len)
-@@ -374,6 +376,13 @@ ath12k_wmi_tlv_parse(struct ath12k_base *ab, struct sk_buff *skb)
+@@ -374,6 +376,13 @@ ath12k_wmi_tlv_parse(struct ath12k_base
  	return tb;
  }
  
@@ -52,7 +52,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  static int ath12k_wmi_cmd_send_nowait(struct ath12k_wmi_pdev *wmi, struct sk_buff *skb,
  				      u32 cmd_id)
  {
-@@ -9060,12 +9069,19 @@ ath12k_wmi_process_csa_switch_count_event(struct ath12k_base *ab,
+@@ -9063,12 +9072,19 @@ ath12k_wmi_process_csa_switch_count_even
  					  const u32 *vdev_ids)
  {
  	u32 current_switch_count = le32_to_cpu(ev->current_switch_count);

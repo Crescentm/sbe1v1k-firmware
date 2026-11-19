@@ -14,11 +14,9 @@ Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
  wpa_supplicant/wnm_sta.c | 4 +---
  1 file changed, 1 insertion(+), 3 deletions(-)
 
-diff --git a/wpa_supplicant/wnm_sta.c b/wpa_supplicant/wnm_sta.c
-index 1c8b93169..3a534fd4b 100644
 --- a/wpa_supplicant/wnm_sta.c
 +++ b/wpa_supplicant/wnm_sta.c
-@@ -279,7 +279,6 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+@@ -284,7 +284,6 @@ static void wnm_sleep_mode_exit_success(
  				wpa_s->wpa,
  				WNM_SLEEP_SUBELEM_GTK,
  				ptr);
@@ -26,7 +24,7 @@ index 1c8b93169..3a534fd4b 100644
  		} else if (*ptr == WNM_SLEEP_SUBELEM_IGTK) {
  			if (ptr[1] < 2 + 6 +
  			    wpa_cipher_key_len(wpa_s->mgmt_group_cipher)) {
-@@ -289,7 +288,6 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+@@ -294,7 +293,6 @@ static void wnm_sleep_mode_exit_success(
  			}
  			wpa_wnmsleep_install_key(wpa_s->wpa,
  						 WNM_SLEEP_SUBELEM_IGTK, ptr);
@@ -34,7 +32,7 @@ index 1c8b93169..3a534fd4b 100644
  		} else if (*ptr == WNM_SLEEP_SUBELEM_BIGTK) {
  			if (ptr[1] < 2 + 6 +
  			    wpa_cipher_key_len(wpa_s->mgmt_group_cipher)) {
-@@ -299,9 +297,9 @@ static void wnm_sleep_mode_exit_success(struct wpa_supplicant *wpa_s,
+@@ -304,9 +302,9 @@ static void wnm_sleep_mode_exit_success(
  			}
  			wpa_wnmsleep_install_key(wpa_s->wpa,
  						 WNM_SLEEP_SUBELEM_BIGTK, ptr);

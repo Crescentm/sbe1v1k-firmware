@@ -16,11 +16,9 @@ Signed-off-by: Jouni Malinen <jouni.malinen@oss.qualcomm.com>
  src/ap/wpa_auth.c | 12 +++++++++++-
  1 file changed, 11 insertions(+), 1 deletion(-)
 
-diff --git a/src/ap/wpa_auth.c b/src/ap/wpa_auth.c
-index c5ed9a6d4..31e7e9684 100644
 --- a/src/ap/wpa_auth.c
 +++ b/src/ap/wpa_auth.c
-@@ -8057,7 +8057,7 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid, size_t max_len,
+@@ -8115,7 +8115,7 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid,
  	u8 rsc[WPA_KEY_RSC_LEN] = {0}, *gtk;
  	struct wpa_group *gsm = sm->group;
  	u8 hdr[2];
@@ -29,7 +27,7 @@ index c5ed9a6d4..31e7e9684 100644
  	const u8 *ptr;
  	size_t slice_len;
  	size_t buflen = 1024;
-@@ -8116,6 +8116,8 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid, size_t max_len,
+@@ -8174,6 +8174,8 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid,
  	 * handle fragmentation.
  	 */
  	slice_len = kde_len <= 246 ? kde_len : 246;
@@ -38,7 +36,7 @@ index c5ed9a6d4..31e7e9684 100644
  	/* ElementID(0xff)|Length(1B)|ElementID Extn(1B)|RSC(8B)|KDE list */
  	*eid++ = WLAN_EID_EXTENSION;
  	*eid++ = slice_len + 1 + WPA_KEY_RSC_LEN;
-@@ -8131,6 +8133,8 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid, size_t max_len,
+@@ -8189,6 +8191,8 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid,
  
  	while (kde_len) {
  		slice_len = kde_len <= 255 ? kde_len : 255;
@@ -47,7 +45,7 @@ index c5ed9a6d4..31e7e9684 100644
  		*eid++ = WLAN_EID_FRAGMENT;
  		*eid++ = slice_len;
  		os_memcpy(eid, ptr, slice_len);
-@@ -8140,8 +8144,14 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid, size_t max_len,
+@@ -8198,8 +8202,14 @@ u8 * wpa_auth_eid_key_delivery(u8 *eid,
  		kde_len -= slice_len;
  	}
  

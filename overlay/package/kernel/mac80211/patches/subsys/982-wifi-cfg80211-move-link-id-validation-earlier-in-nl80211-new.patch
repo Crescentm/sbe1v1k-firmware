@@ -20,7 +20,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
 
 --- a/net/wireless/nl80211.c
 +++ b/net/wireless/nl80211.c
-@@ -9393,6 +9393,16 @@ static int nl80211_new_station(struct sk
+@@ -9457,6 +9457,16 @@ static int nl80211_new_station(struct sk
  	params.link_sta_params.link_id =
  		nl80211_link_id_or_invalid(info->attrs);
  
@@ -37,7 +37,7 @@ Signed-off-by: Johannes Berg <johannes.berg@intel.com>
  	if (info->attrs[NL80211_ATTR_MLD_ADDR]) {
  		mac_addr = nla_data(info->attrs[NL80211_ATTR_MLD_ADDR]);
  		params.link_sta_params.mld_mac = mac_addr;
-@@ -9665,27 +9675,10 @@ static int nl80211_new_station(struct sk
+@@ -9729,27 +9739,10 @@ static int nl80211_new_station(struct sk
  
  	/* be aware of params.vlan when changing code here */
  

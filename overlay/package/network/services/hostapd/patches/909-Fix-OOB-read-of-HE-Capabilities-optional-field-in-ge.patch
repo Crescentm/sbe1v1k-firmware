@@ -38,11 +38,9 @@ Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
  src/common/ieee802_11_common.c | 6 +++++-
  1 file changed, 5 insertions(+), 1 deletion(-)
 
-diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
-index 8ad201ef7..a906e3f93 100644
 --- a/src/common/ieee802_11_common.c
 +++ b/src/common/ieee802_11_common.c
-@@ -3838,7 +3838,11 @@ unsigned int get_max_nss_capability(struct ieee802_11_elems *elems,
+@@ -3849,7 +3849,11 @@ unsigned int get_max_nss_capability(stru
  		(struct ieee80211_he_capabilities *) elems->he_capabilities;
  	le16 mcs_map;
  

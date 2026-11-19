@@ -22,7 +22,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
 ---
 --- a/drivers/net/wireless/ath/ath12k/wmi.c
 +++ b/drivers/net/wireless/ath/ath12k/wmi.c
-@@ -9971,6 +9971,7 @@ static void ath12k_wmi_process_tpc_stats(struct ath12k_base *ab,
+@@ -9974,6 +9974,7 @@ static void ath12k_wmi_process_tpc_stats
  	void *ptr = skb->data;
  	struct ath12k *ar;
  	u16 tlv_tag;
@@ -30,7 +30,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	u32 event_count;
  	int ret;
  
-@@ -9986,6 +9987,7 @@ static void ath12k_wmi_process_tpc_stats(struct ath12k_base *ab,
+@@ -9989,6 +9990,7 @@ static void ath12k_wmi_process_tpc_stats
  
  	tlv = (struct wmi_tlv *)ptr;
  	tlv_tag = le32_get_bits(tlv->header, WMI_TLV_TAG);
@@ -38,7 +38,7 @@ Signed-off-by: Jeff Johnson <jeff.johnson@oss.qualcomm.com>
  	ptr += sizeof(*tlv);
  
  	if (tlv_tag != WMI_TAG_HALPHY_CTRL_PATH_EVENT_FIXED_PARAM) {
-@@ -9993,6 +9995,12 @@ static void ath12k_wmi_process_tpc_stats(struct ath12k_base *ab,
+@@ -9996,6 +9998,12 @@ static void ath12k_wmi_process_tpc_stats
  		return;
  	}
  

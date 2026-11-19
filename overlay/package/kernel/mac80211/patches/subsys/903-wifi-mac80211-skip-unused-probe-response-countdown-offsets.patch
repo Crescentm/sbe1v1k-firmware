@@ -33,7 +33,7 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
 
 --- a/net/mac80211/tx.c
 +++ b/net/mac80211/tx.c
-@@ -5294,7 +5294,8 @@ static void ieee80211_set_beacon_cntdwn(
+@@ -5505,7 +5505,8 @@ static void ieee80211_set_beacon_cntdwn(
  		if (sdata->vif.type == NL80211_IFTYPE_AP && resp) {
  			u16 *resp_offsets = resp->cntdwn_counter_offsets;
  

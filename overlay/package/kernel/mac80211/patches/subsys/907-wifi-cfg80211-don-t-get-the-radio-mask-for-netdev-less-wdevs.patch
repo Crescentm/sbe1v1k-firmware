@@ -24,11 +24,9 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
  net/wireless/util.c | 9 ++++-----
  1 file changed, 4 insertions(+), 5 deletions(-)
 
-diff --git a/net/wireless/util.c b/net/wireless/util.c
-index 24527bf..7142b81 100644
 --- a/net/wireless/util.c
 +++ b/net/wireless/util.c
-@@ -2426,16 +2426,15 @@ static void cfg80211_calculate_bi_data(struct wiphy *wiphy, u32 new_beacon_int,
+@@ -2437,16 +2437,15 @@ static void cfg80211_calculate_bi_data(s
  		if (wdev->valid_links)
  			continue;
  

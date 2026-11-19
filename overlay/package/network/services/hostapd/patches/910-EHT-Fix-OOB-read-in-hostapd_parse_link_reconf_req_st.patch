@@ -39,7 +39,7 @@ Signed-off-by: Brandon Arrendondo <brandon.arrendondo@bissell.com>
 
 --- a/src/ap/ieee802_11_eht.c
 +++ b/src/ap/ieee802_11_eht.c
-@@ -2250,7 +2250,7 @@ hostapd_parse_link_reconf_req_sta_profil
+@@ -2349,7 +2349,7 @@ hostapd_parse_link_reconf_req_sta_profil
  	sta_info_len += nstr_bitmap_size;
  
  	sta_info = per_sta_prof->variable;

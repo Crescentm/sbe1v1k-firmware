@@ -28,7 +28,7 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
 
 --- a/src/drivers/driver_nl80211.c
 +++ b/src/drivers/driver_nl80211.c
-@@ -10505,10 +10505,17 @@ fail:
+@@ -10587,10 +10587,17 @@ fail:
  }
  
  
@@ -49,7 +49,7 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
  
  	if (!(bss->active_links & BIT(link_id))) {
  		wpa_printf(MSG_DEBUG,
-@@ -10549,7 +10556,7 @@ int nl80211_remove_link(struct i802_bss
+@@ -10631,7 +10638,7 @@ int nl80211_remove_link(struct i802_bss
  
  	eloop_cancel_timeout(wpa_driver_nl80211_scan_timeout, drv, bss->ctx);
  	/* Clear the active links and set the flink */
@@ -60,9 +60,9 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
  	if (bss->scan_link == link)
 --- a/src/drivers/driver_nl80211.h
 +++ b/src/drivers/driver_nl80211.h
-@@ -401,7 +401,8 @@ void nl80211_restore_ap_mode(struct i802
- struct i802_link * nl80211_get_link(struct i802_bss *bss, s8 link_id);
+@@ -403,7 +403,8 @@ struct i802_link * nl80211_get_link(stru
  u8 nl80211_get_link_id_from_link(struct i802_bss *bss, struct i802_link *link);
+ s8 nl80211_get_link_id_by_freq(struct i802_bss *bss, unsigned int freq);
  int nl80211_remove_link(struct i802_bss *bss, int link_id);
 -void nl80211_update_active_links(struct i802_bss *bss, int link_id);
 +void nl80211_update_active_links(struct i802_bss *bss, int link_id,
@@ -72,7 +72,7 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
  
 --- a/src/drivers/driver_nl80211_event.c
 +++ b/src/drivers/driver_nl80211_event.c
-@@ -2671,7 +2671,7 @@ static void nl80211_stop_ap(struct i802_
+@@ -2722,7 +2722,7 @@ static void nl80211_stop_ap(struct i802_
  		ctx = mld_link->ctx;
  
  		/* Bring down the active link */
@@ -81,7 +81,7 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
  	}
  
  	wpa_supplicant_event(ctx, EVENT_INTERFACE_UNAVAILABLE, NULL);
-@@ -4826,6 +4826,28 @@ process_incumbt_intf_event:
+@@ -4999,6 +4999,28 @@ static void nl80211_adv_ttlm_event(struc
  }
  
  
@@ -110,7 +110,7 @@ Signed-off-by: Manish Dharanenthiran <manish.dharanenthiran@oss.qualcomm.com>
  static void do_process_drv_event(struct i802_bss *bss, int cmd,
  				 struct nlattr **tb)
  {
-@@ -5133,6 +5155,9 @@ static void do_process_drv_event(struct
+@@ -5318,6 +5340,9 @@ static void do_process_drv_event(struct
  		nl80211_peer_measurement_complete_event(bss, tb);
  		break;
  #endif /* CONFIG_PR */
