@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Matthew Cather <mattbob4@gmail.com>
+Date: Tue, 22 Sep 2026 13:49:46 -0700
+Subject: [PATCH] hostapd: do not notify vlans after the ubus context is
+ torn down
+
+hostapd_free_hapd_data() calls hostapd_ubus_free_bss() and then, three
+statements later, vlan_deinit(). When that BSS holds the last ubus
+reference, hostapd_ubus_ref_dec() frees the shared context and sets the
+file-scope ctx to NULL. vlan_deinit() then removes each dynamic VLAN, and
+every vlan_if_remove() reaches hostapd_ubus_vlan_action(), which passes
+that NULL ctx to ubus_notify().
+
+The has_subscribers guard cannot catch it: nothing clears that flag when
+the object is removed, so a BSS that had a subscriber still takes the
+notify path on the way down and faults.
+
+Guard on ctx, the way hostapd_ubus_free_bss() already does.
+
+Signed-off-by: Matthew Cather <mattbob4@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/25339
+[Crescentm: from OpenWrt PR #25339 head ab8903a1a3fc14df63e3dc064054d9a8a06e27fe,
+ commit ab8903a1a3; unchanged except for line numbers]
+---
+ package/network/services/hostapd/src/src/ap/ubus.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ubus.c b/package/network/services/hostapd/src/src/ap/ubus.c
+--- a/package/network/services/hostapd/src/src/ap/ubus.c
++++ b/package/network/services/hostapd/src/src/ap/ubus.c
+@@ -3335,6 +3335,11 @@ hostapd_ubus_vlan_action(struct hostapd_data *hapd, struct hostapd_vlan *vlan,
+ 	void *c;
+ 	int i;
+ 
++	/* vlan_deinit() runs after hostapd_ubus_free_bss() may have dropped the
++	 * last reference and freed the shared context */
++	if (!ctx)
++		return;
++
+ 	if (!obj->has_subscribers)
+ 		return;
+ 
