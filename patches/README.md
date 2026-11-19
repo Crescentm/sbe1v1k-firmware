@@ -53,7 +53,8 @@ checked against `c4c69cfede`:
 | `overlay/feeds/telephony/…/rtpengine/patches/105` | dropped | the telephony feed has the same fix as `105-kernel-module-use-ccflags-instead-of-EXTRA_CFLAGS.patch` since `8695daf` (2026-10-27); ours sorted after it and would fail as already applied |
 | `overlay/…/hostapd/patches/904` assoc response buffer | dropped | `186-ap-mld-announce-the-removal-of-an-affiliated-ap` adds `hostapd_eid_eht_ml_assoc_len()`, which counts the same Basic ML element plus the Reconfiguration ML element |
 | `overlay/…/hostapd/patches/916` active_links | refreshed with fuzz, checked by hand | the `driver_nl80211.h` context gained `nl80211_get_link_id_by_freq()`; content unchanged, and nothing else handles `NL80211_CMD_START_AP` |
-| `overlay/…/hostapd/patches/` 901, 902, 905, 906, 909, 910, 913, 917, 931 | refreshed | line numbers only |
+| `overlay/…/hostapd/patches/` 901, 902, 905, 906, 909, 910, 913, 917 | refreshed | line numbers only |
+| `overlay/…/hostapd/patches/931` unassociated MLD stations | dropped (found by the first CI build) | It still applied, so the quilt check passed, but it no longer built: `sta_info.c: 'struct sta_info' has no member named 'auth_link_addr'`. `f36751d8bd` rewrote 193 to the hostap submission: transaction 1 now records the link address in `mld_info.links[].peer_addr` (and restarts an `added_unassoc` entry whose link address changed), so the existing `peer_addr` match in `ap_get_link_sta()` finds the station. That is what 931 added `auth_link_addr` for |
 | `overlay/…/mac80211/patches/subsys/` 946, 947, 950, 951, 955, 957 | dropped | ImmortalWrt subsys 486, 485, 487, 489, 490, 488 |
 | `overlay/…/mac80211/patches/subsys/963` | dropped | folded into subsys `361` by `e4d0856463` |
 | `overlay/…/mac80211/patches/subsys/` 33 others | refreshed | line numbers only |

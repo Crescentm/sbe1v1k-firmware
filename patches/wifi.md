@@ -519,7 +519,7 @@ country exists (our wifi-scripts 951 still handles `00`).
 | `916-nl80211-Update-AP-MLD-active_links-bitmap-during-sta` | hostap 4a9a301a2 | Manish Dharanenthiran | **MLO**: active_links not set on START_AP, link stop/remove works on a stale bitmap | clean **2026-11-19:** refreshed, the driver_nl80211.h context gained `nl80211_get_link_id_by_freq()` |
 | `917-nl80211-Add-FT-SAE-AKMs-to-the-fallback-key_mgmt-cap` | hostap 43ee60e13 | Wei Zhang | wpa_supplicant never selects FT-SAE on drivers without AKM lists (mac80211) | clean; STA |
 | `930-AP-MLD-Break-the-mutual-ACS-deferral-between-partner` | [OpenWrt PR #25321](https://github.com/openwrt/openwrt/pull/25321) head 21956d2836 | Nilanka de Silva | **MLO + ACS**: with `channel=auto` on two or more links, each link defers to the other until the retry cap, then one link is disabled | renumbered from 361, unchanged **Dropped 2026-10-12:** ImmortalWrt `d67accc71b` (hostapd 171) defers only while a partner scans, the same fix |
-| `931-AP-find-unassociated-MLD-stations-in-ap_get_link_sta` | [OpenWrt PR #24878](https://github.com/openwrt/openwrt/pull/24878) head aede7845d1 | Alexander Astrovsky | **MLO**: auth TX status of an MLD STA re-authenticating from a new link address is not matched, so WLAN_STA_AUTH is never set | renumbered from 195; `!is_zero_ether_addr` guard added as asked in review |
+| `931-AP-find-unassociated-MLD-stations-in-ap_get_link_sta` | [OpenWrt PR #24878](https://github.com/openwrt/openwrt/pull/24878) head aede7845d1 | Alexander Astrovsky | **MLO**: auth TX status of an MLD STA re-authenticating from a new link address is not matched, so WLAN_STA_AUTH is never set | renumbered from 195; `!is_zero_ether_addr` guard added as asked in review **Dropped 2026-11-19:** ImmortalWrt `f36751d8bd` rewrote 193 so that transaction 1 records the link address in `mld_info.links[].peer_addr`; `ap_get_link_sta()` already matches that, and `auth_link_addr` no longer exists (931 failed to build) |
 | `950-mesh-restart-peering-when-the-driver-lost-a-known-peer` | own work | Crescentm | see the mesh section | **test** |
 | `980-AP-keep-the-configured-width-on-5-6-GHz-if-the-20-40` | own work | Crescentm | 5/6 GHz falls back to HT20 when the 20/40 coexistence scan cannot be requested (EBUSY retries exhausted; three radios share one wiphy) and `noscan` was cleared | **test**. On 5/6 GHz `check_40mhz_5g()` can only swap primary/secondary, never forbid 40 MHz, so skipping it equals `noscan=1`; 2.4 GHz keeps the HT20 fallback |
 
@@ -701,11 +701,21 @@ bumps to 8 and 6; hostapd 916 was refreshed with fuzz and checked by
 hand; the remaining offsets were quilt-refreshed (line numbers).
 
 ImmortalWrt now carries its own hostapd patches 880–926 (MLD, EMLSR/EMLMR,
-AP Removal Timer, ubus bans and refusals). Ours (900–917, 931, 950, 980)
+AP Removal Timer, ubus bans and refusals). Ours (900–917, 950, 980)
 keep their names and apply in between them by name order; all of them
 apply at fuzz 0 on top. The hardware checklist below still applies; add
 to it: an AP MLD with a link removal (ImmortalWrt's new 186 and 921–926
-change that path, our 916 and 931 sit next to it).
+change that path, our 916 sits next to it), and an MLD client that
+re-authenticates from a new link address before associating (the case
+931 covered, now handled by ImmortalWrt's rewritten 193).
+
+931 was dropped after the rebase: it still applied, but the first CI
+build failed on it (`'struct sta_info' has no member named
+'auth_link_addr'`). ImmortalWrt `f36751d8bd` moved 192–194 to their hostap
+submission form, which records the transaction 1 link address in
+`mld_info.links[].peer_addr` instead of `sta->auth_link_addr`, so
+`ap_get_link_sta()` finds the station without 931. A patch that applies
+is not a patch that builds: the quilt check does not replace a build.
 
 # Rebase onto ImmortalWrt `da63f7d6ac` (2026-10-12)
 
