@@ -98,6 +98,28 @@ jobs:
           RELEASE: ${{ steps.check.outputs.release }}
         run: sh firmware/scripts/src-build.sh
 
+      # TEMPORARY: find out why libtool's bootstrap cannot run the host
+      # autoconf (run 45739725527). Remove once that is fixed.
+      - name: Diagnose host autoconf (temporary)
+        if: failure() && steps.check.outputs.skip != 'true'
+        run: |
+          cd "$SRC"
+          h="$PWD/staging_dir/host"
+          set +e
+          echo "== files"; ls -l "$h"/bin/autoconf "$h"/bin/autom4te "$h"/bin/autoheader "$h"/bin/m4
+          echo "== stamps"; ls -la "$h"/stamp | grep -E 'autoconf|m4|automake|libtool'
+          echo "== share/autoconf"; ls "$h"/share/autoconf | head
+          echo "== perl"; command -v perl; perl -v | sed -n 2p
+          echo "== autoconf --version (STAGING_DIR_HOST set)"
+          STAGING_DIR_HOST="$h" "$h"/bin/autoconf --version 2>&1 | head -20; echo "exit=${PIPESTATUS[0]}"
+          echo "== autoconf --version (plain)"
+          "$h"/bin/autoconf --version 2>&1 | head -20; echo "exit=${PIPESTATUS[0]}"
+          echo "== autom4te --version"
+          STAGING_DIR_HOST="$h" "$h"/bin/autom4te --version 2>&1 | head -5; echo "exit=${PIPESTATUS[0]}"
+          echo "== m4 --version"; "$h"/bin/m4 --version 2>&1 | head -2
+          echo "== build-make.log, autoconf and m4 lines"
+          grep -n -E 'tools/(autoconf|m4)|autoconf' build-make.log | head -40
+
       - name: Collect release files
         if: steps.check.outputs.skip != 'true'
         id: collect
