@@ -22,6 +22,18 @@ STAGE=${STAGE:-all}
 TEST=${TEST:-0}
 OUT=${OUT:-$REPO/out/src-$(date +%Y%m%d-%H%M%S)}
 
+# The parameters above arrive in the environment, and make hands the
+# environment to every build. gnulib's maint.mk, which autoconf uses, does
+# "ifdef RELEASE: VERSION := $(word 1, $(RELEASE))": with RELEASE set, the
+# host autoconf reports the release name as its version and libtool's
+# bootstrap rejects it as missing. Keep them as unexported shell variables.
+for v in SRC JOBS STAGE TEST OUT RELEASE FEED_URL UPDATE; do
+	eval "_v=\${$v-}"
+	unset "$v"
+	eval "$v=\$_v"
+done
+unset _v v
+
 die() { echo "error: $*" >&2; exit 1; }
 log() { echo "==> $*"; }
 
