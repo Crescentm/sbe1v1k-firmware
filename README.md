@@ -69,6 +69,8 @@ SRC=/path/to/immortalwrt sh scripts/src-build.sh
 - GitHub Actions（`.github/workflows/build.yml`）每周或手动触发，编译后把固件和打包好的软件源
   （`feed-<发布名>.tar.zst`）发布到 Releases；
   [sbe1v1k-packages](https://github.com/Crescentm/sbe1v1k-packages) 再把最近几个版本的软件源发布到 GitHub Pages。
+  发布名由 ImmortalWrt 版本和本仓库 commit 组成（如 `r43517-6003f6b8c3-cff69f3`）；两者都没变、
+  同名 Release 已存在时，这次运行会直接跳过编译和发布。
 - 软件包签名公钥：[keys/sbe1v1k-apk.pem](keys/sbe1v1k-apk.pem)。
 
 ## 许可

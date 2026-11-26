@@ -55,7 +55,24 @@ jobs:
           ./scripts/feeds install -a
           echo "IMMORTALWRT_REV=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
+      # The release name only depends on the ImmortalWrt commit and the
+      # recipe commit, so a build with both unchanged would end in a release
+      # that already exists. Skip it instead of failing after the build.
+      - name: Check for an existing release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Same name as src-build.sh: <ImmortalWrt version>-<recipe commit>
+          release="$(cd "$SRC" && ./scripts/getver.sh)-$(git -C firmware rev-parse --short HEAD)"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          if gh release view "$release" -R "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release $release already exists: ImmortalWrt and the recipe are unchanged, nothing to build."
+          fi
+
       - name: Install signing key
+        if: steps.check.outputs.skip != 'true'
         env:
           APK_SIGN_KEY: ${{ secrets.APK_SIGN_KEY }}
         run: |
@@ -66,6 +83,7 @@ jobs:
             cmp - "$SRC/public-key.pem"
 
       - uses: actions/cache@v4
+        if: steps.check.outputs.skip != 'true'
         with:
           # CONFIG_CCACHE keeps its cache in the tree's .ccache
           path: |
@@ -75,9 +93,13 @@ jobs:
           restore-keys: build-
 
       - name: Build
+        if: steps.check.outputs.skip != 'true'
+        env:
+          RELEASE: ${{ steps.check.outputs.release }}
         run: sh firmware/scripts/src-build.sh
 
       - name: Collect release files
+        if: steps.check.outputs.skip != 'true'
         id: collect
         run: |
           release=$(cat "$OUT/release")
@@ -87,6 +109,7 @@ jobs:
           ls -la "$OUT"
 
       - name: Publish release
+        if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
