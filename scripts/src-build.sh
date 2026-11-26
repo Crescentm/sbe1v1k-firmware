@@ -143,7 +143,20 @@ log "building with $JOBS jobs"
 # serially (that rebuilds everything left on one core); rerun with V=s.
 log "make output: $SRC/build-make.log"
 if ! make -j"$JOBS" IGNORE_ERRORS=m > "$SRC/build-make.log" 2>&1; then
-	grep 'ERROR: package' "$SRC/build-make.log" || tail -30 "$SRC/build-make.log"
+	# The log stays on the builder (in CI it is gone with the runner), and
+	# the parallel build only says which target failed. Rebuild each failed
+	# target alone with V=s so that its actual error ends up in this output.
+	failed=$(sed -n 's/^ *ERROR: \([^ ]*\) failed to build.*/\1/p' \
+		"$SRC/build-make.log" | sort -u)
+	if [ -z "$failed" ]; then
+		tail -30 "$SRC/build-make.log"
+	else
+		grep 'ERROR: .* failed to build' "$SRC/build-make.log"
+		for t in $failed; do
+			log "rebuilding $t with -j1 V=s (last 80 lines)"
+			make -j1 V=s "$t/compile" 2>&1 | tail -80
+		done
+	fi
 	die "build failed"
 fi
 
